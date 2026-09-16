@@ -1,0 +1,151 @@
+import os
+import re
+import sqlite3
+from openai import OpenAI
+
+#Tabelle da analizzare
+NOMI_TABELLE_SORGENTE = ['VENDITE_PC'] 
+NOME_TABELLA_TARGET = 'TABELLA_FINALE_TARGET'
+
+conn = sqlite3.connect(':memory:')
+cursor = conn.cursor()
+
+
+cursor.execute("CREATE TABLE VENDITE_PC (Modello TEXT, Prezzo_Locale REAL, Valuta_Locale TEXT)")
+vendite = [
+    ("PC_Alfa", 1000.0, "EUR"), ("PC_Alfa", 1200.0, "EUR"), ("PC_Alfa", 1100.0, "EUR"),
+    ("PC_Beta", 800.0, "GBP"), ("PC_Beta", 850.0, "GBP"), ("PC_Beta", 900.0, "GBP"), ("PC_Beta", 800.0, "GBP"),
+    ("PC_Gamma", 150000.0, "JPY"), ("PC_Gamma", 160000.0, "JPY"), ("PC_Gamma", 140000.0, "JPY"),
+    ("PC_Delta", 2000.0, "EUR"), ("PC_Delta", 2100.0, "EUR"),
+    ("PC_Epsilon", 500.0, "GBP"), ("PC_Epsilon", 600.0, "GBP"), ("PC_Epsilon", 550.0, "GBP"), ("PC_Epsilon", 600.0, "GBP"),
+    ("PC_Zeta", 200000.0, "JPY"), ("PC_Zeta", 220000.0, "JPY"), ("PC_Zeta", 210000.0, "JPY"), ("PC_Zeta", 205000.0, "JPY")
+]
+cursor.executemany("INSERT INTO VENDITE_PC VALUES (?, ?, ?)", vendite)
+
+# Popoliamo lo Stato B (Target finale GIA' ESISTENTE) - Medie matematiche esatte
+cursor.execute("CREATE TABLE TABELLA_FINALE_TARGET (Modello_PC TEXT, Prezzo_Medio_USD REAL)")
+target_dati = [
+    ('PC_Alfa', 1188.0),     
+    ('PC_Beta', 1046.875),   
+    ('PC_Gamma', 975.0),     
+    ('PC_Delta', 2214.0),    
+    ('PC_Epsilon', 703.125), 
+    ('PC_Zeta', 1356.875)    
+]
+cursor.executemany("INSERT INTO TABELLA_FINALE_TARGET VALUES (?, ?)", target_dati)
+conn.commit()
+
+######################### Estrazione schemi e dati
+schema_partenza = ""
+placeholders = "('" + "', '".join(NOMI_TABELLE_SORGENTE) + "')"
+cursor.execute(f"SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN {placeholders}")
+
+for nome_tabella, sql in cursor.fetchall():
+    schema_partenza += f"{sql};\n"
+    cursor.execute(f"SELECT * FROM {nome_tabella} ORDER BY RANDOM() LIMIT 5")
+    schema_partenza += f"/* Esempio dati {nome_tabella}: {cursor.fetchall()} */\n"
+
+    cursor.execute(f"PRAGMA table_info({nome_tabella})")
+    for col in [info[1] for info in cursor.fetchall()]:
+        cursor.execute(f"SELECT DISTINCT {col} FROM {nome_tabella} LIMIT 10")
+        valori_unici = [v[0] for v in cursor.fetchall()]
+        schema_partenza += f"/* Valori unici colonna '{col}': {valori_unici} */\n"
+    schema_partenza += "\n"
+
+cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name = '{NOME_TABELLA_TARGET}'")
+schema_arrivo = cursor.fetchone()[0] + ";\n"
+cursor.execute(f"SELECT * FROM {NOME_TABELLA_TARGET} LIMIT 10")
+schema_arrivo += f"/* Dati target completi: {cursor.fetchall()} */\n"
+
+#######Prompt
+def genera_sql_intermedio(schema_a: str, schema_b: str, nome_target: str) -> str:
+    prompt = f"""Sei un Data Architect esperto in Reverse Engineering per pipeline ETL su SQLite.
+
+STATO A (Schema tabelle sorgente con esempi di dati reali):
+{schema_a}
+
+STATO B (Schema tabella target con esempi del risultato finale atteso):
+{schema_b}
+
+COMPITO:
+Confronta i dati dello STATO A con i dati dello STATO B. Deduci in totale autonomia quali trasformazioni (JOIN, GROUP BY, calcoli) sono state fatte per arrivare a quel risultato.
+
+REGOLE TASSATIVE STRUTTURALI:
+1. SOLO PASSAGGI INTERMEDI: Mostrami il processo logico creando SOLO tabelle temporanee (es. CREATE TEMP TABLE step_1 AS SELECT...).
+2. NESSUN INSERT SUL TARGET: È ASSOLUTAMENTE VIETATO usare INSERT INTO {nome_target}. La tabella finale esiste già. L'ultima tabella temporanea che crei dovrà avere la stessa struttura e gli stessi dati dello STATO B.
+3. NOMI COMPLETI (ANTI-ERRORE): È vietato usare alias brevi per le tabelle. Usa sempre il nome completo.
+4. Restituisci SOLO codice SQL sequenziale, racchiuso tra i tag ```sql e ```.
+5. DATI LATENTI E MAPPATURE MANCANTI: Se per passare dallo STATO A allo STATO B noti che manca un tassello logico (es. costanti matematiche, coefficienti di conversione, traduzioni di categorie o dizionari di stato),
+DEVI dedurlo matematicamente o logicamente osservando i dati campione. Crea tu stesso una tabella temporanea statica (usando costrutti come SELECT ... UNION ALL)
+che contenga questa "mappatura" dedotta, e usala come ponte per le operazioni successive.
+"""
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key="************",
+        )
+        response = client.chat.completions.create(
+            model="nvidia/nemotron-3-ultra-550b-a55b:free", 
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0
+        )
+        print("✅ Chiamata a OpenRouter (Nemotron 550B) riuscita!")
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"❌ Errore nella chiamata API: {e}")
+        return ""
+
+print("\n3. Analisi logica in corso tramite IA...")
+testo_risposta = genera_sql_intermedio(schema_partenza, schema_arrivo, NOME_TABELLA_TARGET)
+
+
+#############Estrazione e pulizia codice
+testo_risposta = re.sub(r'<think>.*?</think>', '', testo_risposta, flags=re.DOTALL)
+blocchi_grezzi = re.findall(r'```(.*?)```', testo_risposta, re.DOTALL)
+
+if blocchi_grezzi:
+    blocchi_sql = [b[3:].strip() if b.strip().lower().startswith('sql') else b.strip() for b in blocchi_grezzi if b.strip()]
+else:
+    blocchi_sql = [testo_risposta.strip()]
+
+query_completa = "\n".join(blocchi_sql)
+query_completa = re.sub(r'INSERT\s+INTO\s+.*?;', '', query_completa, flags=re.IGNORECASE | re.DOTALL)
+query_completa = re.sub(r'INSERT\s+INTO\s+.*', '', query_completa, flags=re.IGNORECASE | re.DOTALL)
+
+################Esecuzione e stampa
+print("\n" + "=" * 50)
+print("=" * 50)
+
+if not query_completa.strip():
+    print("[ATTENZIONE] Nessun codice SQL valido estratto.")
+else:
+    
+    try:
+        cursor.executescript(query_completa)
+        
+        cursor.execute("SELECT name FROM sqlite_temp_master WHERE type='table'")
+        tabelle_create = [riga[0] for riga in cursor.fetchall()]
+        
+        if not tabelle_create:
+            print("⚠️ L'IA non ha creato tabelle temporanee.")
+        else:
+            for i, nome_tabella in enumerate(tabelle_create, 1):
+                cursor.execute(f"SELECT * FROM {nome_tabella}")
+                risultati = cursor.fetchall()
+                colonne = [desc[0] for desc in cursor.description]
+                
+                print(f"✅ PASSAGGIO {i} - Tabella logica: [{nome_tabella}]")
+                print("-" * (16 * len(colonne)))
+                print(" | ".join(f"{col:^14}" for col in colonne))
+                print("-" * (16 * len(colonne)))
+                
+                for riga in risultati:
+                    print(" | ".join(f"{str(round(val, 4)) if isinstance(val, float) else str(val):^14}" for val in riga))
+                print("\n")
+                
+    except Exception as e:
+        print(f"\n[ERRORE CRITICO SQLITE]: {e}")
+        print(f"Query che ha fallito:\n{query_completa}")
+
+conn.close()
+
