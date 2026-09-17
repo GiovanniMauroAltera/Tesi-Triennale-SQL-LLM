@@ -1,0 +1,72 @@
+==================================================
+==================================================
+-- Passo 1: Creazione di una tabella temporanea per mappare le valute
+CREATE TEMP TABLE valute_mappa AS
+SELECT 'EUR' AS Valuta_Locale, 1.0 AS Conversione_EUR_TO_USD
+UNION ALL
+SELECT 'GBP' AS Valuta_Locale, 1.31 AS Conversione_GBP_TO_USD
+UNION ALL
+SELECT 'JPY' AS Valuta_Locale, 0.0091 AS Conversione_JPY_TO_USD;
+
+-- Passo 2: Creazione di una tabella temporanea per calcolare il prezzo medio in USD
+CREATE TEMP TABLE prezzo_medio_usd AS
+SELECT
+  VENDITE_PC.Modello AS Modello_PC,
+  SUM(VENDITE_PC.Prezzo_Locale * valute_mappa.Conversione_EUR_TO_USD) / COUNT(*) AS Prezzo_Medio_USD
+FROM VENDITE_PC
+JOIN valute_mappa ON VENDITE_PC.Valuta_Locale = valute_mappa.Valuta_Locale
+GROUP BY VENDITE_PC.Modello;
+
+-- Passo 3: Creazione di una tabella temporanea per eliminare i duplicati e ordinare i dati
+CREATE TEMP TABLE step_3 AS
+SELECT DISTINCT Modello_PC, Prezzo_Medio_USD
+FROM prezzo_medio_usd
+ORDER BY Modello_PC;
+
+-- Passo 4: Creazione della tabella finale con i dati calcolati
+CREATE TEMP TABLE TABELLA_FINALE AS
+SELECT Modello_PC, ROUND(Prezzo_Medio_USD, 3) AS Prezzo_Medio_USD
+FROM step_3;
+✅ PASSAGGIO 1 - Tabella logica: [valute_mappa]
+--------------------------------
+Valuta_Locale  | Conversione_EUR_TO_USD
+--------------------------------
+     EUR       |      1.0
+     GBP       |      1.31
+     JPY       |     0.0091
+
+
+✅ PASSAGGIO 2 - Tabella logica: [prezzo_medio_usd]
+--------------------------------
+  Modello_PC   | Prezzo_Medio_USD
+--------------------------------
+   PC_Alfa     |     1100.0
+   PC_Beta     |    1097.125
+   PC_Delta    |     2050.0
+  PC_Epsilon   |    736.875
+   PC_Gamma    |     1365.0
+   PC_Zeta     |    1899.625
+
+
+✅ PASSAGGIO 3 - Tabella logica: [step_3]
+--------------------------------
+  Modello_PC   | Prezzo_Medio_USD
+--------------------------------
+   PC_Alfa     |     1100.0
+   PC_Beta     |    1097.125
+   PC_Delta    |     2050.0
+  PC_Epsilon   |    736.875
+   PC_Gamma    |     1365.0
+   PC_Zeta     |    1899.625
+
+
+✅ PASSAGGIO 4 - Tabella logica: [TABELLA_FINALE]
+--------------------------------
+  Modello_PC   | Prezzo_Medio_USD
+--------------------------------
+   PC_Alfa     |     1100.0
+   PC_Beta     |    1097.125
+   PC_Delta    |     2050.0
+  PC_Epsilon   |    736.875
+   PC_Gamma    |     1365.0
+   PC_Zeta     |    1899.625
