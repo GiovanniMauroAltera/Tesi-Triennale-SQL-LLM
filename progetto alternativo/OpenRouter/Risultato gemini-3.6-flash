@@ -1,0 +1,38 @@
+==================================================
+==================================================
+
+
+--- Query 1 ---
+CREATE TEMP TABLE VENDITE_CON_CAMBIO AS
+SELECT
+    VENDITE_PC.Modello AS Modello,
+    VENDITE_PC.Prezzo_Locale * VALUTE.Cambio AS Prezzo_USD
+FROM
+    VENDITE_PC
+JOIN
+    VALUTE ON VENDITE_PC.Valuta_Locale = VALUTE.Valuta;
+
+CREATE TEMP TABLE VENDITE_AGGREGATE AS
+SELECT
+    VENDITE_CON_CAMBIO.Modello AS Modello_PC,
+    AVG(VENDITE_CON_CAMBIO.Prezzo_USD) AS Prezzo_Medio_USD
+FROM
+    VENDITE_CON_CAMBIO
+GROUP BY
+    VENDITE_CON_CAMBIO.Modello;
+
+INSERT INTO TABELLA_FINALE_TARGET (Modello_PC, Prezzo_Medio_USD)
+SELECT
+    VENDITE_AGGREGATE.Modello_PC,
+    VENDITE_AGGREGATE.Prezzo_Medio_USD
+FROM
+    VENDITE_AGGREGATE;
+
+==================================================
+==================================================
+
+
+✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:
+('PC_Alfa', 1080.0)
+('PC_Beta', 1000.0)
+('PC_Gamma', 975.0)
