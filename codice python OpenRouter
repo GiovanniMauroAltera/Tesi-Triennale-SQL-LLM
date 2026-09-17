@@ -86,6 +86,8 @@ che contenga questa "mappatura" dedotta, e usala come ponte per le operazioni su
         )
         response = client.chat.completions.create(
             model="nvidia/nemotron-3-ultra-550b-a55b:free", 
+            #google/gemma-4-31b-it:free
+            #nvidia/nemotron-3-ultra-550b-a55b:free
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0
         )
