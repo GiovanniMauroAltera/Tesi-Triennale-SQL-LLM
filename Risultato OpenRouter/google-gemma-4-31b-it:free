@@ -1,0 +1,66 @@
+--------------------------------------------------
+CREATE TEMP TABLE tasso_cambio AS
+SELECT 'EUR' AS Valuta, 1.107 AS Tasso_USD UNION ALL
+SELECT 'GBP' AS Valuta, 1.30859375 AS Tasso_USD UNION ALL
+SELECT 'JPY' AS Valuta, 0.0046875 AS Tasso_USD;
+
+CREATE TEMP TABLE step_1 AS
+SELECT
+    VENDITE_PC.Modello,
+    VENDITE_PC.Prezzo_Locale * tasso_cambio.Tasso_USD AS Prezzo_USD
+FROM VENDITE_PC
+JOIN tasso_cambio ON VENDITE_PC.Valuta_Locale = tasso_cambio.Valuta;
+
+CREATE TEMP TABLE step_2 AS
+SELECT
+    Modello AS Modello_PC,
+    AVG(Prezzo_USD) AS Prezzo_Medio_USD
+FROM step_1
+GROUP BY Modello;
+--------------------------------------------------
+
+✅ PASSAGGIO 1 - Tabella logica: [tasso_cambio]
+--------------------------------
+    Valuta     |   Tasso_USD
+--------------------------------
+     EUR       |     1.107
+     GBP       |     1.3086
+     JPY       |     0.0047
+
+
+✅ PASSAGGIO 2 - Tabella logica: [step_1]
+--------------------------------
+   Modello     |   Prezzo_USD
+--------------------------------
+   PC_Alfa     |     1107.0
+   PC_Alfa     |     1328.4
+   PC_Alfa     |     1217.7
+   PC_Beta     |    1046.875
+   PC_Beta     |   1112.3047
+   PC_Beta     |   1177.7344
+   PC_Beta     |    1046.875
+   PC_Gamma    |    703.125
+   PC_Gamma    |     750.0
+   PC_Gamma    |     656.25
+   PC_Delta    |     2214.0
+   PC_Delta    |     2324.7
+  PC_Epsilon   |    654.2969
+  PC_Epsilon   |    785.1562
+  PC_Epsilon   |    719.7266
+  PC_Epsilon   |    785.1562
+   PC_Zeta     |     937.5
+   PC_Zeta     |    1031.25
+   PC_Zeta     |    984.375
+   PC_Zeta     |    960.9375
+
+
+✅ PASSAGGIO 3 - Tabella logica: [step_2]
+--------------------------------
+  Modello_PC   | Prezzo_Medio_USD
+--------------------------------
+   PC_Alfa     |     1217.7
+   PC_Beta     |   1095.9473
+   PC_Delta    |    2269.35
+  PC_Epsilon   |    736.084
+   PC_Gamma    |    703.125
+   PC_Zeta     |    978.5156
