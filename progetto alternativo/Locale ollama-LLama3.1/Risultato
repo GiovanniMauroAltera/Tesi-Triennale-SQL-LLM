@@ -1,0 +1,40 @@
+==================================================
+==================================================
+
+
+--- Query 1 ---
+-- Creazione di una tabella temporanea per calcolare il prezzo medio in USD
+CREATE TEMP TABLE Prezzi_Medio_USD AS
+SELECT
+  VENDITE_PC.Modello,
+  (VENDITE_PC.Prezzo_Locale * VALUTE.Cambio) AS Prezzo_Medio_USD
+FROM
+  VENDITE_PC
+  JOIN VALUTE ON VENDITE_PC.Valuta_Locale = VALUTE.Valuta;
+
+-- Creazione di una tabella temporanea per calcolare il prezzo medio in USD per modello
+CREATE TEMP TABLE Prezzi_Medio_USD_Modello AS
+SELECT
+  Modello,
+  AVG(Prezzo_Medio_USD) AS Prezzo_Medio_USD
+FROM
+  Prezzi_Medio_USD
+GROUP BY
+  Modello;
+
+-- Popolamento della tabella target
+INSERT INTO TABELLA_FINALE_TARGET (Modello_PC, Prezzo_Medio_USD)
+SELECT
+  Modello,
+  Prezzo_Medio_USD
+FROM
+  Prezzi_Medio_USD_Modello;
+
+==================================================
+==================================================
+
+
+✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:
+('PC_Alfa', 1080.0)
+('PC_Beta', 1000.0)
+('PC_Gamma', 975.0)
