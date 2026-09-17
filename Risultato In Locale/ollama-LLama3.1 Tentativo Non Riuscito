@@ -1,0 +1,89 @@
+==================================================
+==================================================
+-- Passo 1: Creazione di una tabella temporanea per le conversioni di valuta
+CREATE TEMP TABLE conversioni_valuta AS
+SELECT 'EUR' AS valuta, 1.0 AS conversione_eur_gbp, 0.0086 AS conversione_eur_jpy
+UNION ALL
+SELECT 'GBP' AS valuta, 1.0 AS conversione_eur_gbp, 0.0071 AS conversione_eur_jpy
+UNION ALL
+SELECT 'JPY' AS valuta, 0.117 AS conversione_eur_gbp, 1.0 AS conversione_eur_jpy;
+
+-- Passo 2: Creazione di una tabella temporanea per i prezzi medi in USD
+CREATE TEMP TABLE prezzi_medi_usd AS
+SELECT
+  VENDITE_PC.Modello,
+  (VENDITE_PC.Prezzo_Locale * conversioni_valuta.conversione_eur_gbp) AS prezzo_medi_gbp,
+  (VENDITE_PC.Prezzo_Locale * conversioni_valuta.conversione_eur_jpy) AS prezzo_medi_jpy
+FROM VENDITE_PC
+JOIN conversioni_valuta ON VENDITE_PC.Valuta_Locale = conversioni_valuta.valuta;
+
+-- Passo 3: Creazione di una tabella temporanea per i prezzi medi in USD (continuazione)
+CREATE TEMP TABLE prezzi_medi_usd_continua AS
+SELECT
+  Modello,
+  AVG(CASE WHEN Valuta_Locale = 'EUR' THEN Prezzo_Locale ELSE NULL END) AS prezzo_medi_eur,
+  AVG(CASE WHEN Valuta_Locale = 'GBP' THEN Prezzo_Locale ELSE NULL END) AS prezzo_medi_gbp,
+  AVG(CASE WHEN Valuta_Locale = 'JPY' THEN Prezzo_Locale ELSE NULL END) AS prezzo_medi_jpy
+FROM VENDITE_PC
+GROUP BY Modello;
+
+-- Passo 4: Creazione di una tabella temporanea per i prezzi medi in USD (continuazione)
+CREATE TEMP TABLE prezzi_medi_usd_continua_2 AS
+SELECT
+  Modello,
+  (prezzi_medi_usd_continua.prezzo_medi_gbp * conversioni_valuta.conversione_eur_gbp) AS prezzo_medi_eur,
+  (prezzi_medi_usd_continua.prezzo_medi_jpy * conversioni_valuta.conversione_eur_jpy) AS prezzo_medi_jpy
+FROM prezzi_medi_usd_continua
+JOIN conversioni_valuta ON TRUE;
+
+-- Passo 5: Creazione della tabella finale con i prezzi medi in USD
+CREATE TEMP TABLE tabella_finale AS
+SELECT
+  Modello_PC,
+  (prezzi_medi_usd_continua_2.prezzo_medi_eur + prezzi_medi_usd_continua_2.prezzo_medi_jpy) / 2 AS Prezzo_Medio_USD
+FROM prezzi_medi_usd_continua_2;
+
+[ERRORE CRITICO SQLITE]: no such column: Modello_PC
+Query che ha fallito:
+-- Passo 1: Creazione di una tabella temporanea per le conversioni di valuta
+CREATE TEMP TABLE conversioni_valuta AS
+SELECT 'EUR' AS valuta, 1.0 AS conversione_eur_gbp, 0.0086 AS conversione_eur_jpy
+UNION ALL
+SELECT 'GBP' AS valuta, 1.0 AS conversione_eur_gbp, 0.0071 AS conversione_eur_jpy
+UNION ALL
+SELECT 'JPY' AS valuta, 0.117 AS conversione_eur_gbp, 1.0 AS conversione_eur_jpy;
+
+-- Passo 2: Creazione di una tabella temporanea per i prezzi medi in USD
+CREATE TEMP TABLE prezzi_medi_usd AS
+SELECT
+  VENDITE_PC.Modello,
+  (VENDITE_PC.Prezzo_Locale * conversioni_valuta.conversione_eur_gbp) AS prezzo_medi_gbp,
+  (VENDITE_PC.Prezzo_Locale * conversioni_valuta.conversione_eur_jpy) AS prezzo_medi_jpy
+FROM VENDITE_PC
+JOIN conversioni_valuta ON VENDITE_PC.Valuta_Locale = conversioni_valuta.valuta;
+
+-- Passo 3: Creazione di una tabella temporanea per i prezzi medi in USD (continuazione)
+CREATE TEMP TABLE prezzi_medi_usd_continua AS
+SELECT
+  Modello,
+  AVG(CASE WHEN Valuta_Locale = 'EUR' THEN Prezzo_Locale ELSE NULL END) AS prezzo_medi_eur,
+  AVG(CASE WHEN Valuta_Locale = 'GBP' THEN Prezzo_Locale ELSE NULL END) AS prezzo_medi_gbp,
+  AVG(CASE WHEN Valuta_Locale = 'JPY' THEN Prezzo_Locale ELSE NULL END) AS prezzo_medi_jpy
+FROM VENDITE_PC
+GROUP BY Modello;
+
+-- Passo 4: Creazione di una tabella temporanea per i prezzi medi in USD (continuazione)
+CREATE TEMP TABLE prezzi_medi_usd_continua_2 AS
+SELECT
+  Modello,
+  (prezzi_medi_usd_continua.prezzo_medi_gbp * conversioni_valuta.conversione_eur_gbp) AS prezzo_medi_eur,
+  (prezzi_medi_usd_continua.prezzo_medi_jpy * conversioni_valuta.conversione_eur_jpy) AS prezzo_medi_jpy
+FROM prezzi_medi_usd_continua
+JOIN conversioni_valuta ON TRUE;
+
+-- Passo 5: Creazione della tabella finale con i prezzi medi in USD
+CREATE TEMP TABLE tabella_finale AS
+SELECT
+  Modello_PC,
+  (prezzi_medi_usd_continua_2.prezzo_medi_eur + prezzi_medi_usd_continua_2.prezzo_medi_jpy) / 2 AS Prezzo_Medio_USD
+FROM prezzi_medi_usd_continua_2;
