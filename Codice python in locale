@@ -89,10 +89,10 @@ che contenga questa "mappatura" dedotta, e usala come ponte per le operazioni su
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0
         )
-        print("✅ Chiamata a OpenRouter (Nemotron 550B) riuscita!")
+        print("✅ Chiamata a Ollama (LLama3.1) riuscita!")
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"❌ Errore nella chiamata API: {e}")
+        print(f"❌ Errore nella chiamata: {e}")
         return ""
 
 print("\n3. Analisi logica in corso tramite IA...")
