@@ -1,0 +1,38 @@
+==================================================
+==================================================
+
+
+--- Query 1 ---
+CREATE TEMP TABLE TEMP_VENDITE_CONVERTITE_USD AS
+SELECT
+    VENDITE_PC.Modello,
+    (VENDITE_PC.Prezzo_Locale * VALUTE.Cambio) AS Prezzo_USD
+FROM
+    VENDITE_PC
+JOIN
+    VALUTE ON VENDITE_PC.Valuta_Locale = VALUTE.Valuta;
+
+CREATE TEMP TABLE TEMP_MEDIA_PREZZI_PER_MODELLO AS
+SELECT
+    TEMP_VENDITE_CONVERTITE_USD.Modello AS Modello_PC,
+    AVG(TEMP_VENDITE_CONVERTITE_USD.Prezzo_USD) AS Prezzo_Medio_USD
+FROM
+    TEMP_VENDITE_CONVERTITE_USD
+GROUP BY
+    TEMP_VENDITE_CONVERTITE_USD.Modello;
+
+INSERT INTO TABELLA_FINALE_TARGET (Modello_PC, Prezzo_Medio_USD)
+SELECT
+    TEMP_MEDIA_PREZZI_PER_MODELLO.Modello_PC,
+    TEMP_MEDIA_PREZZI_PER_MODELLO.Prezzo_Medio_USD
+FROM
+    TEMP_MEDIA_PREZZI_PER_MODELLO;
+
+==================================================
+==================================================
+
+
+✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:
+('PC_Alfa', 1080.0)
+('PC_Beta', 1000.0)
+('PC_Gamma', 975.0)
