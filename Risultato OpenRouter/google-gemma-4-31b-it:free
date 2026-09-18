@@ -19,7 +19,7 @@ FROM step_1
 GROUP BY Modello;
 --------------------------------------------------
 
-✅ PASSAGGIO 1 - Tabella logica: [tasso_cambio]
+PASSAGGIO 1 - Tabella logica: [tasso_cambio]
 --------------------------------
     Valuta     |   Tasso_USD
 --------------------------------
@@ -28,7 +28,7 @@ GROUP BY Modello;
      JPY       |     0.0047
 
 
-✅ PASSAGGIO 2 - Tabella logica: [step_1]
+PASSAGGIO 2 - Tabella logica: [step_1]
 --------------------------------
    Modello     |   Prezzo_USD
 --------------------------------
@@ -54,7 +54,7 @@ GROUP BY Modello;
    PC_Zeta     |    960.9375
 
 
-✅ PASSAGGIO 3 - Tabella logica: [step_2]
+PASSAGGIO 3 - Tabella logica: [step_2]
 --------------------------------
   Modello_PC   | Prezzo_Medio_USD
 --------------------------------
