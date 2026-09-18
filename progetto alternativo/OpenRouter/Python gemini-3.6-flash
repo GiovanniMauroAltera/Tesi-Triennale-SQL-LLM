@@ -59,10 +59,10 @@ REGOLE TASSATIVE STRUTTURALI:
 """
     try:
         response = model.generate_content(prompt, generation_config={"temperature": 0.0})
-        print("✅ Chiamata a Gemini riuscita!")
+        print("Chiamata a Gemini riuscita!")
         return response.text
     except Exception as e:
-        print("❌ Errore nella chiamata all'API:")
+        print("Errore nella chiamata all'API:")
         print(e)
         return ""
 
@@ -100,7 +100,7 @@ if successo and blocchi_sql:
     try:
         cursor.execute("SELECT * FROM TABELLA_FINALE_TARGET")
         risultati = cursor.fetchall()
-        print("\n✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:")
+        print("\nESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:")
         for riga in risultati:
             print(riga)
     except Exception as e:
