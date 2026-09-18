@@ -89,10 +89,10 @@ che contenga questa "mappatura" dedotta, e usala come ponte per le operazioni su
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0
         )
-        print("✅ Chiamata a Ollama (LLama3.1) riuscita!")
+        print("Chiamata a Ollama (LLama3.1) riuscita!")
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"❌ Errore nella chiamata: {e}")
+        print(f"Errore nella chiamata: {e}")
         return ""
 
 print("\n3. Analisi logica in corso tramite IA...")
@@ -127,14 +127,14 @@ else:
         tabelle_create = [riga[0] for riga in cursor.fetchall()]
         
         if not tabelle_create:
-            print("⚠️ L'IA non ha creato tabelle temporanee.")
+            print("L'IA non ha creato tabelle temporanee.")
         else:
             for i, nome_tabella in enumerate(tabelle_create, 1):
                 cursor.execute(f"SELECT * FROM {nome_tabella}")
                 risultati = cursor.fetchall()
                 colonne = [desc[0] for desc in cursor.description]
                 
-                print(f"✅ PASSAGGIO {i} - Tabella logica: [{nome_tabella}]")
+                print(f"PASSAGGIO {i} - Tabella logica: [{nome_tabella}]")
                 print("-" * (16 * len(colonne)))
                 print(" | ".join(f"{col:^14}" for col in colonne))
                 print("-" * (16 * len(colonne)))
