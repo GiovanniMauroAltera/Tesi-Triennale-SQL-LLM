@@ -27,7 +27,7 @@ ORDER BY Modello_PC;
 CREATE TEMP TABLE TABELLA_FINALE AS
 SELECT Modello_PC, ROUND(Prezzo_Medio_USD, 3) AS Prezzo_Medio_USD
 FROM step_3;
-✅ PASSAGGIO 1 - Tabella logica: [valute_mappa]
+PASSAGGIO 1 - Tabella logica: [valute_mappa]
 --------------------------------
 Valuta_Locale  | Conversione_EUR_TO_USD
 --------------------------------
@@ -36,7 +36,7 @@ Valuta_Locale  | Conversione_EUR_TO_USD
      JPY       |     0.0091
 
 
-✅ PASSAGGIO 2 - Tabella logica: [prezzo_medio_usd]
+PASSAGGIO 2 - Tabella logica: [prezzo_medio_usd]
 --------------------------------
   Modello_PC   | Prezzo_Medio_USD
 --------------------------------
@@ -48,7 +48,7 @@ Valuta_Locale  | Conversione_EUR_TO_USD
    PC_Zeta     |    1899.625
 
 
-✅ PASSAGGIO 3 - Tabella logica: [step_3]
+PASSAGGIO 3 - Tabella logica: [step_3]
 --------------------------------
   Modello_PC   | Prezzo_Medio_USD
 --------------------------------
@@ -60,7 +60,7 @@ Valuta_Locale  | Conversione_EUR_TO_USD
    PC_Zeta     |    1899.625
 
 
-✅ PASSAGGIO 4 - Tabella logica: [TABELLA_FINALE]
+PASSAGGIO 4 - Tabella logica: [TABELLA_FINALE]
 --------------------------------
   Modello_PC   | Prezzo_Medio_USD
 --------------------------------
