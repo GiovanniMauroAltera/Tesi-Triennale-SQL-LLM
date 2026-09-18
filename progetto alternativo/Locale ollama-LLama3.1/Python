@@ -85,7 +85,7 @@ if successo and blocchi_sql:
     try:
         cursor.execute("SELECT * FROM TABELLA_FINALE_TARGET")
         risultati = cursor.fetchall()
-        print("\n✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:")
+        print("\nESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:")
         for riga in risultati:
             print(riga)
     except Exception as e:
