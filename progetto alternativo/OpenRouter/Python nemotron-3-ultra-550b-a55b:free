@@ -66,11 +66,11 @@ REGOLE TASSATIVE STRUTTURALI:
             temperature=0.0
         )
         
-        print("✅ Chiamata a OpenRouter riuscita!")
+        print("Chiamata a OpenRouter riuscita!")
         return response.choices[0].message.content.strip()
 
     except Exception as e:
-        print("❌ Errore nella chiamata all'API:")
+        print("Errore nella chiamata all'API:")
         print(e)
         return ""
 
@@ -109,7 +109,7 @@ if successo and blocchi_sql:
     try:
         cursor.execute("SELECT * FROM TABELLA_FINALE_TARGET")
         risultati = cursor.fetchall()
-        print("\n✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:")
+        print("\nESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:")
         for riga in risultati:
             print(riga)
     except Exception as e:
