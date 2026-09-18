@@ -32,7 +32,7 @@ FROM
 ==================================================
 
 
-✅ ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:
+ESECUZIONE COMPLETATA! Dati nella TABELLA_FINALE_TARGET:
 ('PC_Alfa', 1080.0)
 ('PC_Beta', 1000.0)
 ('PC_Gamma', 975.0)
