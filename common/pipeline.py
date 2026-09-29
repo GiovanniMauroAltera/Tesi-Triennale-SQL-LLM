@@ -188,7 +188,11 @@ def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2
 
     tabella_generata = tabelle_create[-1]
 
-    cursor.execute(f"SELECT * FROM {nome_tabella_target}")
+    # "main." e' necessario: se il modello chiama la sua tabella temporanea con lo
+    # stesso nome (anche solo case-insensitive) della tabella target, SQLite la fa
+    # ombreggiare quella vera per i riferimenti non qualificati, e la valutazione
+    # finirebbe per confrontare la tabella target con se stessa.
+    cursor.execute(f'SELECT * FROM main."{nome_tabella_target}"')
     righe_target = cursor.fetchall()
 
     try:
