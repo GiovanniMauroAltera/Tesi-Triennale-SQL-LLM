@@ -69,12 +69,12 @@ Confronta i dati dello STATO A con i dati dello STATO B. Deduci in totale autono
 
 REGOLE TASSATIVE STRUTTURALI:
 1. SOLO PASSAGGI INTERMEDI: Mostrami il processo logico creando SOLO tabelle temporanee (es. CREATE TEMP TABLE step_1 AS SELECT...).
-2. NESSUN INSERT SUL TARGET: È ASSOLUTAMENTE VIETATO usare INSERT INTO {nome_target}. La tabella finale esiste già. L'ultima tabella temporanea che crei dovrà avere la stessa struttura e gli stessi dati dello STATO B.
+2. NESSUN INSERT SUL TARGET: È ASSOLUTAMENTE VIETATO usare INSERT INTO {nome_target}. La tabella finale esiste già. L'ultima tabella temporanea che crei dovrà avere la stessa struttura (inclusi i nomi delle colonne) e gli stessi dati dello STATO B.
 3. NOMI COMPLETI (ANTI-ERRORE): È vietato usare alias brevi per le tabelle. Usa sempre il nome completo.
 4. Restituisci SOLO codice SQL sequenziale, racchiuso tra i tag ```sql e ```.
 5. DATI LATENTI E MAPPATURE MANCANTI: Se per passare dallo STATO A allo STATO B noti che manca un tassello logico (es. costanti matematiche, coefficienti di conversione, traduzioni di categorie o dizionari di stato),
-DEVI dedurlo matematicamente o logicamente osservando i dati campione. Crea tu stesso una tabella temporanea statica (usando costrutti come SELECT ... UNION ALL)
-che contenga questa "mappatura" dedotta, e usala come ponte per le operazioni successive.
+DEVI dedurlo osservando i dati campione. PRIMA di usare un valore dedotto, verificalo su ALMENO due righe campione della stessa categoria, se disponibili: se non torna su entrambe, non è quello giusto, continua a cercare.
+Crea tu stesso una tabella temporanea statica (usando costrutti come SELECT ... UNION ALL) che contenga questa "mappatura" dedotta, e usala come ponte per le operazioni successive.
 """
 
 

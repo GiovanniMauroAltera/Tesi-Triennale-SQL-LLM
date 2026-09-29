@@ -1,0 +1,79 @@
+
+3. Analisi logica in corso tramite IA...
+Chiamata a OpenRouter (Nemotron 550B) riuscita!
+
+==================================================
+==================================================
+CREATE TEMP TABLE tasso_cambio AS
+SELECT 'EUR' AS Valuta, 1.08 AS Tasso UNION ALL
+SELECT 'GBP', 1.25 UNION ALL
+SELECT 'JPY', 975.0/140000.0;
+
+CREATE TEMP TABLE vendite_usd AS
+SELECT VENDITE_PC.Modello, VENDITE_PC.Prezzo_Locale * tasso_cambio.Tasso AS Prezzo_USD
+FROM VENDITE_PC
+JOIN tasso_cambio ON VENDITE_PC.Valuta_Locale = tasso_cambio.Valuta;
+
+CREATE TEMP TABLE media_usd AS
+SELECT Modello AS Modello_PC, AVG(Prezzo_USD) AS Prezzo_Medio_USD
+FROM vendite_usd
+GROUP BY Modello;
+PASSAGGIO 1 - Tabella logica: [tasso_cambio]
+--------------------------------
+    Valuta     |     Tasso
+--------------------------------
+     EUR       |      1.08
+     GBP       |      1.25
+     JPY       |     0.007
+
+
+PASSAGGIO 2 - Tabella logica: [vendite_usd]
+--------------------------------
+   Modello     |   Prezzo_USD
+--------------------------------
+   PC_Alfa     |     1080.0
+   PC_Alfa     |     1296.0
+   PC_Alfa     |     1188.0
+   PC_Beta     |     1000.0
+   PC_Beta     |     1062.5
+   PC_Beta     |     1125.0
+   PC_Beta     |     1000.0
+   PC_Gamma    |   1044.6429
+   PC_Gamma    |   1114.2857
+   PC_Gamma    |     975.0
+   PC_Delta    |     2160.0
+   PC_Delta    |     2268.0
+  PC_Epsilon   |     625.0
+  PC_Epsilon   |     750.0
+  PC_Epsilon   |     687.5
+  PC_Epsilon   |     750.0
+   PC_Zeta     |   1392.8571
+   PC_Zeta     |   1532.1429
+   PC_Zeta     |     1462.5
+   PC_Zeta     |   1427.6786
+
+
+PASSAGGIO 3 - Tabella logica: [media_usd]
+--------------------------------
+  Modello_PC   | Prezzo_Medio_USD
+--------------------------------
+   PC_Alfa     |     1188.0
+   PC_Beta     |    1046.875
+   PC_Delta    |     2214.0
+  PC_Epsilon   |    703.125
+   PC_Gamma    |   1044.6429
+   PC_Zeta     |   1453.7946
+
+
+
+==================================================
+VALUTAZIONE ACCURATEZZA
+==================================================
+Tabella valutata: media_usd
+Righe corrette: 4/6 (accuratezza: 66.7%)
+  [OK ] PC_Alfa: atteso=(1188.0,) ottenuto=(1188.0,)
+  [OK ] PC_Beta: atteso=(1046.875,) ottenuto=(1046.875,)
+  [ERR] PC_Gamma: atteso=(975.0,) ottenuto=(1044.642857142857,)
+  [OK ] PC_Delta: atteso=(2214.0,) ottenuto=(2214.0,)
+  [OK ] PC_Epsilon: atteso=(703.125,) ottenuto=(703.125,)
+  [ERR] PC_Zeta: atteso=(1356.875,) ottenuto=(1453.794642857143,)
