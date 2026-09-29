@@ -31,7 +31,9 @@ TIMEOUT_OLLAMA_SECONDI = 900
 
 
 def attesa_dopo_errore(errore_testo, tentativo):
-    if "429" in errore_testo or "rate" in errore_testo.lower():
+    # 429 (rate limit) ed errori 5xx del server tendono a durare qualche minuto: attesa progressiva.
+    testo = errore_testo.lower()
+    if "429" in testo or "rate" in testo or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")):
         return ATTESA_RETRY_RATE_LIMIT_SECONDI * tentativo
     return ATTESA_RETRY_SECONDI
 
@@ -46,6 +48,11 @@ MODELLI = {
     "gemma": {"provider": "google", "model": "gemma-4-31b-it"},
     "gpt-oss-120b": {"provider": "groq", "model": "openai/gpt-oss-120b"},
 }
+
+# Tarati sui tempi osservati: Nemotron ha impiegato fino a 29 minuti per una risposta valida,
+# Gemma via Google ~8 minuti. Senza timeout espliciti una richiesta bloccata dal server
+# restava appesa 10 minuti per tentativo (default della libreria openai).
+TIMEOUT_CLOUD_SECONDI = {"openrouter": 2400, "google": 900, "groq": 300}
 
 ENDPOINT_OPENAI_COMPATIBILI = {
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
@@ -97,7 +104,9 @@ def chiama_modello(config, prompt):
         contenuto, troncata = chiama_ollama(config["model"], prompt)
     else:
         base_url, variabile_chiave = ENDPOINT_OPENAI_COMPATIBILI[config["provider"]]
-        client = OpenAI(base_url=base_url, api_key=os.environ[variabile_chiave])
+        # max_retries=0: gli unici tentativi sono i nostri (MAX_TENTATIVI), niente ripetizioni nascoste della libreria.
+        client = OpenAI(base_url=base_url, api_key=os.environ[variabile_chiave],
+                        timeout=TIMEOUT_CLOUD_SECONDI[config["provider"]], max_retries=0)
         response = client.chat.completions.create(
             model=config["model"],
             messages=[{"role": "user", "content": prompt}],
