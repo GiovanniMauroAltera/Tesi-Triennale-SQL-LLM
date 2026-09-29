@@ -1,0 +1,5 @@
+bird-mini-dev/
+casi_bird/*.sqlite
+risultati_bird/
+__pycache__/
+*.pyc

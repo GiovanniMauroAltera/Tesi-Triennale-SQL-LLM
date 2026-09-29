@@ -1,0 +1,358 @@
+{
+  "riusciti": [
+    {
+      "question_id": 1153,
+      "db_id": "thrombosis_prediction",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1153_thrombosis_prediction.sqlite",
+      "tabelle_sorgente": [
+        "Patient",
+        "Laboratory"
+      ],
+      "righe_risultato": 60,
+      "token_stimati": 2692
+    },
+    {
+      "question_id": 964,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\964_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "drivers"
+      ],
+      "righe_risultato": 157,
+      "token_stimati": 1077
+    },
+    {
+      "question_id": 901,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\901_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "circuits",
+        "races"
+      ],
+      "righe_risultato": 3,
+      "token_stimati": 1855
+    },
+    {
+      "question_id": 1220,
+      "db_id": "thrombosis_prediction",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1220_thrombosis_prediction.sqlite",
+      "tabelle_sorgente": [
+        "Patient",
+        "Laboratory"
+      ],
+      "righe_risultato": 20,
+      "token_stimati": 2694
+    },
+    {
+      "question_id": 1157,
+      "db_id": "thrombosis_prediction",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1157_thrombosis_prediction.sqlite",
+      "tabelle_sorgente": [
+        "Examination",
+        "Patient"
+      ],
+      "righe_risultato": 3,
+      "token_stimati": 1426
+    },
+    {
+      "question_id": 785,
+      "db_id": "superhero",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\785_superhero.sqlite",
+      "tabelle_sorgente": [
+        "alignment",
+        "superhero"
+      ],
+      "righe_risultato": 28,
+      "token_stimati": 1162
+    },
+    {
+      "question_id": 781,
+      "db_id": "superhero",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\781_superhero.sqlite",
+      "tabelle_sorgente": [
+        "colour",
+        "superhero"
+      ],
+      "righe_risultato": 3,
+      "token_stimati": 1155
+    },
+    {
+      "question_id": 950,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\950_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "constructors",
+        "constructorStandings"
+      ],
+      "righe_risultato": 6,
+      "token_stimati": 1209
+    },
+    {
+      "question_id": 1044,
+      "db_id": "european_football_2",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1044_european_football_2.sqlite",
+      "tabelle_sorgente": [
+        "Player"
+      ],
+      "righe_risultato": 4,
+      "token_stimati": 841
+    },
+    {
+      "question_id": 1357,
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1357_student_club.sqlite",
+      "tabelle_sorgente": [
+        "income",
+        "member"
+      ],
+      "righe_risultato": 2,
+      "token_stimati": 1533
+    },
+    {
+      "question_id": 959,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\959_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "races",
+        "results"
+      ],
+      "righe_risultato": 17,
+      "token_stimati": 1898
+    },
+    {
+      "question_id": 1155,
+      "db_id": "thrombosis_prediction",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1155_thrombosis_prediction.sqlite",
+      "tabelle_sorgente": [
+        "Patient",
+        "Laboratory"
+      ],
+      "righe_risultato": 103,
+      "token_stimati": 2692
+    },
+    {
+      "question_id": 414,
+      "db_id": "card_games",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\414_card_games.sqlite",
+      "tabelle_sorgente": [
+        "sets",
+        "set_translations"
+      ],
+      "righe_risultato": 10,
+      "token_stimati": 2530
+    },
+    {
+      "question_id": 1035,
+      "db_id": "european_football_2",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1035_european_football_2.sqlite",
+      "tabelle_sorgente": [
+        "Team_Attributes"
+      ],
+      "righe_risultato": 161,
+      "token_stimati": 1513
+    },
+    {
+      "question_id": 1411,
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1411_student_club.sqlite",
+      "tabelle_sorgente": [
+        "expense",
+        "member"
+      ],
+      "righe_risultato": 12,
+      "token_stimati": 1675
+    },
+    {
+      "question_id": 978,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\978_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "circuits"
+      ],
+      "righe_risultato": 2,
+      "token_stimati": 1158
+    },
+    {
+      "question_id": 532,
+      "db_id": "codebase_community",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\532_codebase_community.sqlite",
+      "tabelle_sorgente": [
+        "users"
+      ],
+      "righe_risultato": 4430,
+      "token_stimati": 2850
+    },
+    {
+      "question_id": 1422,
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1422_student_club.sqlite",
+      "tabelle_sorgente": [
+        "event",
+        "budget"
+      ],
+      "righe_risultato": 4,
+      "token_stimati": 1520
+    },
+    {
+      "question_id": 764,
+      "db_id": "superhero",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\764_superhero.sqlite",
+      "tabelle_sorgente": [
+        "superpower",
+        "hero_power"
+      ],
+      "righe_risultato": 4,
+      "token_stimati": 686
+    },
+    {
+      "question_id": 1507,
+      "db_id": "debit_card_specializing",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1507_debit_card_specializing.sqlite",
+      "tabelle_sorgente": [
+        "gasstations",
+        "transactions_1k"
+      ],
+      "righe_risultato": 2,
+      "token_stimati": 997
+    },
+    {
+      "question_id": 850,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\850_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "circuits",
+        "races"
+      ],
+      "righe_risultato": 3,
+      "token_stimati": 1821
+    },
+    {
+      "question_id": 861,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\861_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "drivers",
+        "qualifying"
+      ],
+      "righe_risultato": 2,
+      "token_stimati": 1502
+    },
+    {
+      "question_id": 200,
+      "db_id": "toxicology",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\200_toxicology.sqlite",
+      "tabelle_sorgente": [
+        "bond",
+        "molecule"
+      ],
+      "righe_risultato": 2,
+      "token_stimati": 722
+    },
+    {
+      "question_id": 573,
+      "db_id": "codebase_community",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\573_codebase_community.sqlite",
+      "tabelle_sorgente": [
+        "comments"
+      ],
+      "righe_risultato": 5,
+      "token_stimati": 1499
+    },
+    {
+      "question_id": 1334,
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1334_student_club.sqlite",
+      "tabelle_sorgente": [
+        "zip_code",
+        "member"
+      ],
+      "righe_risultato": 3,
+      "token_stimati": 1465
+    },
+    {
+      "question_id": 1410,
+      "db_id": "student_club",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1410_student_club.sqlite",
+      "tabelle_sorgente": [
+        "expense",
+        "member"
+      ],
+      "righe_risultato": 1,
+      "token_stimati": 1637
+    },
+    {
+      "question_id": 1166,
+      "db_id": "thrombosis_prediction",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\1166_thrombosis_prediction.sqlite",
+      "tabelle_sorgente": [
+        "Examination",
+        "Patient"
+      ],
+      "righe_risultato": 1,
+      "token_stimati": 1415
+    },
+    {
+      "question_id": 910,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\910_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "circuits"
+      ],
+      "righe_risultato": 1,
+      "token_stimati": 1145
+    },
+    {
+      "question_id": 857,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\857_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "circuits",
+        "races"
+      ],
+      "righe_risultato": 1,
+      "token_stimati": 1808
+    },
+    {
+      "question_id": 868,
+      "db_id": "formula_1",
+      "difficulty": "simple",
+      "percorso": "casi_bird\\868_formula_1.sqlite",
+      "tabelle_sorgente": [
+        "circuits",
+        "races"
+      ],
+      "righe_risultato": 1,
+      "token_stimati": 1808
+    }
+  ],
+  "falliti": []
+}
