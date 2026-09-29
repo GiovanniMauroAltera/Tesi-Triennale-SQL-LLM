@@ -2,6 +2,11 @@ import re
 import sqlite3
 
 
+def _q(identificatore):
+    # I nomi di tabelle/colonne BIRD possono contenere spazi o parentesi (es. "First Date").
+    return '"' + identificatore.replace('"', '""') + '"'
+
+
 def carica_caso(percorso_db):
     """Carica un caso di test da un file .sqlite standalone.
 
@@ -48,19 +53,20 @@ def crea_dataset_demo(cursor):
     cursor.connection.commit()
 
 
-def estrai_schema_e_campioni(cursor, nomi_tabelle, n_campioni=3):
+def estrai_schema_e_campioni(cursor, nomi_tabelle, n_campioni=3, casuale=True):
+    ordine = "ORDER BY RANDOM()" if casuale else ""
     schema = ""
-    placeholders = "('" + "', '".join(nomi_tabelle) + "')"
-    cursor.execute(f"SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN {placeholders}")
+    segnaposti = ",".join("?" * len(nomi_tabelle))
+    cursor.execute(f"SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN ({segnaposti})", nomi_tabelle)
 
     for nome_tabella, sql in cursor.fetchall():
         schema += f"{sql};\n"
-        cursor.execute(f"SELECT * FROM {nome_tabella} ORDER BY RANDOM() LIMIT {n_campioni}")
+        cursor.execute(f"SELECT * FROM {_q(nome_tabella)} {ordine} LIMIT {n_campioni}")
         schema += f"/* Esempio dati {nome_tabella}: {cursor.fetchall()} */\n"
 
-        cursor.execute(f"PRAGMA table_info({nome_tabella})")
+        cursor.execute(f"PRAGMA table_info({_q(nome_tabella)})")
         for col in [info[1] for info in cursor.fetchall()]:
-            cursor.execute(f"SELECT DISTINCT {col} FROM {nome_tabella} LIMIT 10")
+            cursor.execute(f"SELECT DISTINCT {_q(col)} FROM {_q(nome_tabella)} LIMIT 10")
             valori_unici = [v[0] for v in cursor.fetchall()]
             schema += f"/* Valori unici colonna '{col}': {valori_unici} */\n"
         schema += "\n"
@@ -69,9 +75,9 @@ def estrai_schema_e_campioni(cursor, nomi_tabelle, n_campioni=3):
 
 
 def estrai_schema_target(cursor, nome_tabella_target):
-    cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name = '{nome_tabella_target}'")
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name = ?", (nome_tabella_target,))
     schema = cursor.fetchone()[0] + ";\n"
-    cursor.execute(f"SELECT * FROM {nome_tabella_target} LIMIT 10")
+    cursor.execute(f"SELECT * FROM {_q(nome_tabella_target)} LIMIT 10")
     schema += f"/* Dati target completi: {cursor.fetchall()} */\n"
     return schema
 
@@ -100,7 +106,9 @@ Crea tu stesso una tabella temporanea statica (usando costrutti come SELECT ... 
 
 
 def estrai_query_sql(testo_risposta: str) -> str:
-    testo_risposta = re.sub(r'<think>.*?</think>', '', testo_risposta, flags=re.DOTALL)
+    # <think> (es. DeepSeek-R1) e <thought> (Gemma via API Google): il ragionamento puo'
+    # contenere bozze di SQL che non devono essere eseguite insieme alla risposta finale.
+    testo_risposta = re.sub(r'<(think|thought)>.*?</\1>', '', testo_risposta, flags=re.DOTALL)
     blocchi_grezzi = re.findall(r'```(.*?)```', testo_risposta, re.DOTALL)
 
     if blocchi_grezzi:
@@ -138,7 +146,7 @@ def esegui_e_stampa(cursor, query_completa: str):
         return []
 
     for i, nome_tabella in enumerate(tabelle_create, 1):
-        cursor.execute(f"SELECT * FROM {nome_tabella}")
+        cursor.execute(f"SELECT * FROM {_q(nome_tabella)}")
         risultati = cursor.fetchall()
         colonne = [desc[0] for desc in cursor.description]
 
@@ -173,18 +181,12 @@ def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2
     modello dichiara equivalente allo Stato B. Il confronto è per insieme di righe
     (l'ordine non conta, nessuna colonna è assunta come chiave): ogni riga attesa
     cerca una corrispondenza tra le righe generate, con tolleranza numerica sui
-    campi numerici e uguaglianza esatta sugli altri. Funziona con schemi arbitrari,
-    non solo con quello a due colonne del dataset demo.
+    campi numerici e uguaglianza esatta sugli altri. Le righe generate rimaste senza
+    corrispondenza contano come errori (precisione), cosi' come quelle attese non trovate
+    (richiamo).
     """
     if not tabelle_create:
-        return {
-            "tabella_valutata": None,
-            "righe_totali": 0,
-            "righe_corrette": 0,
-            "accuratezza": 0.0,
-            "dettaglio": [],
-            "errore": "Nessuna tabella temporanea creata: impossibile valutare.",
-        }
+        return _valutazione_fallita(None, "Nessuna tabella temporanea creata: impossibile valutare.")
 
     tabella_generata = tabelle_create[-1]
 
@@ -192,23 +194,17 @@ def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2
     # stesso nome (anche solo case-insensitive) della tabella target, SQLite la fa
     # ombreggiare quella vera per i riferimenti non qualificati, e la valutazione
     # finirebbe per confrontare la tabella target con se stessa.
-    cursor.execute(f'SELECT * FROM main."{nome_tabella_target}"')
+    cursor.execute(f"SELECT * FROM main.{_q(nome_tabella_target)}")
     righe_target = cursor.fetchall()
 
     try:
-        cursor.execute(f"SELECT * FROM {tabella_generata}")
+        cursor.execute(f"SELECT * FROM {_q(tabella_generata)}")
         righe_disponibili = list(cursor.fetchall())
     except Exception as e:
-        return {
-            "tabella_valutata": tabella_generata,
-            "righe_totali": len(righe_target),
-            "righe_corrette": 0,
-            "accuratezza": 0.0,
-            "dettaglio": [],
-            "errore": f"Impossibile leggere la tabella generata '{tabella_generata}': {e}",
-        }
+        return _valutazione_fallita(tabella_generata, f"Impossibile leggere la tabella generata '{tabella_generata}': {e}")
 
-    dettaglio = []
+    n_generate = len(righe_disponibili)
+    righe_mancanti = []
     righe_corrette = 0
     for riga_attesa in righe_target:
         indice_trovato = next(
@@ -217,32 +213,63 @@ def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2
         )
         if indice_trovato is not None:
             righe_corrette += 1
-            dettaglio.append({"atteso": riga_attesa, "ottenuto": righe_disponibili.pop(indice_trovato), "corretto": True})
+            righe_disponibili.pop(indice_trovato)
         else:
-            dettaglio.append({"atteso": riga_attesa, "ottenuto": None, "corretto": False})
+            righe_mancanti.append(riga_attesa)
+    righe_in_piu = righe_disponibili
+
+    # Precisione penalizza le righe generate in piu' (es. una query che restituisce "tutto"),
+    # richiamo quelle attese mancanti. "Esatto" e' l'Execution Accuracy di BIRD (ordine ignorato).
+    precisione = righe_corrette / n_generate if n_generate else float(not righe_target)
+    richiamo = righe_corrette / len(righe_target) if righe_target else float(not n_generate)
+    f1 = 2 * precisione * richiamo / (precisione + richiamo) if precisione + richiamo else 0.0
 
     return {
         "tabella_valutata": tabella_generata,
-        "righe_totali": len(righe_target),
+        "righe_attese": len(righe_target),
+        "righe_generate": n_generate,
         "righe_corrette": righe_corrette,
-        "accuratezza": righe_corrette / len(righe_target) if righe_target else 0.0,
-        "dettaglio": dettaglio,
+        "precisione": precisione,
+        "richiamo": richiamo,
+        "f1": f1,
+        "esatto": not righe_mancanti and not righe_in_piu,
+        "esempi_righe_mancanti": righe_mancanti[:20],
+        "esempi_righe_in_piu": righe_in_piu[:20],
         "errore": None,
+    }
+
+
+def _valutazione_fallita(tabella_generata, errore):
+    return {
+        "tabella_valutata": tabella_generata,
+        "righe_attese": 0,
+        "righe_generate": 0,
+        "righe_corrette": 0,
+        "precisione": 0.0,
+        "richiamo": 0.0,
+        "f1": 0.0,
+        "esatto": False,
+        "esempi_righe_mancanti": [],
+        "esempi_righe_in_piu": [],
+        "errore": errore,
     }
 
 
 def stampa_valutazione(risultato):
     print("\n" + "=" * 50)
-    print("VALUTAZIONE ACCURATEZZA")
+    print("VALUTAZIONE")
     print("=" * 50)
     if risultato["errore"]:
         print(f"[NON VALUTABILE] {risultato['errore']}")
         return
     print(f"Tabella valutata: {risultato['tabella_valutata']}")
+    print(f"Risultato esatto: {'SI' if risultato['esatto'] else 'NO'}")
     print(
-        f"Righe corrette: {risultato['righe_corrette']}/{risultato['righe_totali']} "
-        f"(accuratezza: {risultato['accuratezza'] * 100:.1f}%)"
+        f"Righe corrette: {risultato['righe_corrette']} su {risultato['righe_attese']} attese "
+        f"e {risultato['righe_generate']} generate (precisione {risultato['precisione'] * 100:.1f}%, "
+        f"richiamo {risultato['richiamo'] * 100:.1f}%, F1 {risultato['f1'] * 100:.1f}%)"
     )
-    for riga in risultato["dettaglio"]:
-        stato = "OK " if riga["corretto"] else "ERR"
-        print(f"  [{stato}] atteso={riga['atteso']} ottenuto={riga['ottenuto']}")
+    for riga in risultato["esempi_righe_mancanti"]:
+        print(f"  [MANCANTE] {riga}")
+    for riga in risultato["esempi_righe_in_piu"]:
+        print(f"  [IN PIU']  {riga}")
