@@ -40,7 +40,6 @@ MODELLI = {
     "qwen2.5-coder-7b": {"provider": "ollama", "model": "qwen2.5-coder:7b"},
     "nemotron": {"provider": "openrouter", "model": "nvidia/nemotron-3-ultra-550b-a55b:free"},
     "gemma": {"provider": "openrouter", "model": "google/gemma-4-31b-it:free"},
-    "qwen": {"provider": "openrouter", "model": "qwen/qwen3.8-27b:free"},
 }
 
 
