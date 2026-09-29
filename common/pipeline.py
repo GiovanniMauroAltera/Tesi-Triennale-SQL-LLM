@@ -1,4 +1,25 @@
 import re
+import sqlite3
+
+
+def carica_caso(percorso_db):
+    """Carica un caso di test da un file .sqlite standalone.
+
+    Il file deve contenere le tabelle sorgente, la tabella target già popolata,
+    e una tabella '_caso_info' (tabelle_sorgente, tabella_target) con i loro nomi.
+    I dati vengono copiati in una connessione in memoria: il file su disco non
+    viene mai modificato, e le tabelle temporanee create dal modello restano isolate.
+    """
+    origine = sqlite3.connect(percorso_db)
+    conn = sqlite3.connect(":memory:")
+    origine.backup(conn)
+    origine.close()
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT tabelle_sorgente, tabella_target FROM _caso_info")
+    tabelle_sorgente_raw, tabella_target = cursor.fetchone()
+    nomi_tabelle_sorgente = [nome.strip() for nome in tabelle_sorgente_raw.split(",")]
+    return conn, cursor, nomi_tabelle_sorgente, tabella_target
 
 
 def crea_dataset_demo(cursor):
@@ -139,12 +160,21 @@ def _valori_vicini(atteso, ottenuto, tol_rel, tol_abs):
     return atteso == ottenuto
 
 
+def _righe_vicine(riga_a, riga_b, tol_rel, tol_abs):
+    if len(riga_a) != len(riga_b):
+        return False
+    return all(_valori_vicini(a, b, tol_rel, tol_abs) for a, b in zip(riga_a, riga_b))
+
+
 def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2, tol_abs=1e-6):
     """Confronta l'ultima tabella temporanea creata dal modello con la tabella target.
 
     Per costruzione del prompt, l'ultima tabella temporanea creata è quella che il
-    modello dichiara equivalente allo Stato B: la si confronta riga per riga con la
-    tabella target usando la prima colonna come chiave.
+    modello dichiara equivalente allo Stato B. Il confronto è per insieme di righe
+    (l'ordine non conta, nessuna colonna è assunta come chiave): ogni riga attesa
+    cerca una corrispondenza tra le righe generate, con tolleranza numerica sui
+    campi numerici e uguaglianza esatta sugli altri. Funziona con schemi arbitrari,
+    non solo con quello a due colonne del dataset demo.
     """
     if not tabelle_create:
         return {
@@ -163,7 +193,7 @@ def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2
 
     try:
         cursor.execute(f"SELECT * FROM {tabella_generata}")
-        righe_generate = cursor.fetchall()
+        righe_disponibili = list(cursor.fetchall())
     except Exception as e:
         return {
             "tabella_valutata": tabella_generata,
@@ -174,26 +204,18 @@ def valuta_accuratezza(cursor, tabelle_create, nome_tabella_target, tol_rel=1e-2
             "errore": f"Impossibile leggere la tabella generata '{tabella_generata}': {e}",
         }
 
-    mappa_generata = {riga[0]: riga[1:] for riga in righe_generate}
-
     dettaglio = []
     righe_corrette = 0
-    for riga in righe_target:
-        chiave, valori_attesi = riga[0], riga[1:]
-        valori_ottenuti = mappa_generata.get(chiave)
-        corretto = (
-            valori_ottenuti is not None
-            and len(valori_ottenuti) == len(valori_attesi)
-            and all(_valori_vicini(a, o, tol_rel, tol_abs) for a, o in zip(valori_attesi, valori_ottenuti))
+    for riga_attesa in righe_target:
+        indice_trovato = next(
+            (i for i, riga_gen in enumerate(righe_disponibili) if _righe_vicine(riga_attesa, riga_gen, tol_rel, tol_abs)),
+            None,
         )
-        if corretto:
+        if indice_trovato is not None:
             righe_corrette += 1
-        dettaglio.append({
-            "chiave": chiave,
-            "atteso": valori_attesi,
-            "ottenuto": valori_ottenuti,
-            "corretto": corretto,
-        })
+            dettaglio.append({"atteso": riga_attesa, "ottenuto": righe_disponibili.pop(indice_trovato), "corretto": True})
+        else:
+            dettaglio.append({"atteso": riga_attesa, "ottenuto": None, "corretto": False})
 
     return {
         "tabella_valutata": tabella_generata,
@@ -219,4 +241,4 @@ def stampa_valutazione(risultato):
     )
     for riga in risultato["dettaglio"]:
         stato = "OK " if riga["corretto"] else "ERR"
-        print(f"  [{stato}] {riga['chiave']}: atteso={riga['atteso']} ottenuto={riga['ottenuto']}")
+        print(f"  [{stato}] atteso={riga['atteso']} ottenuto={riga['ottenuto']}")

@@ -1,8 +1,7 @@
-import sqlite3
 from openai import OpenAI
 
 from common.pipeline import (
-    crea_dataset_demo,
+    carica_caso,
     estrai_schema_e_campioni,
     estrai_schema_target,
     costruisci_prompt,
@@ -12,14 +11,10 @@ from common.pipeline import (
     stampa_valutazione,
 )
 
-#Tabelle da analizzare
-NOMI_TABELLE_SORGENTE = ['VENDITE_PC']
-NOME_TABELLA_TARGET = 'TABELLA_FINALE_TARGET'
+#Caso di test da eseguire
+PERCORSO_CASO = "casi/pc_multivaluta.sqlite"
 
-conn = sqlite3.connect(':memory:')
-cursor = conn.cursor()
-
-crea_dataset_demo(cursor)
+conn, cursor, NOMI_TABELLE_SORGENTE, NOME_TABELLA_TARGET = carica_caso(PERCORSO_CASO)
 
 ######################### Estrazione schemi e dati
 schema_partenza = estrai_schema_e_campioni(cursor, NOMI_TABELLE_SORGENTE, n_campioni=3)
