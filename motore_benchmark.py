@@ -22,6 +22,9 @@ from common.pipeline import (
 )
 
 N_RUN = 3
+# Run in piu' per i due modelli senza limiti giornalieri (decisione del 30/09): stime piu' precise,
+# a parita' di tempo. Gli altri restano a N_RUN per via delle quote gratuite.
+N_RUN_PER_MODELLO = {"gemma": 8, "qwen2.5-coder-7b": 8}
 MAX_TENTATIVI = 5
 ATTESA_RETRY_SECONDI = 10
 ATTESA_RETRY_RATE_LIMIT_SECONDI = 30  # backoff piu' lungo, progressivo, per errori 429
@@ -84,6 +87,10 @@ def e_guasto_temporaneo(errore_testo):
     testo = errore_testo.lower()
     return ("429" in testo or "connection error" in testo
             or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")))
+
+
+def n_run(nome_modello):
+    return N_RUN_PER_MODELLO.get(nome_modello, N_RUN)
 
 
 def elenco_casi():
@@ -219,10 +226,11 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
     if limite_casi:
         casi = casi[:limite_casi]
     modelli_da_usare = solo_modelli or list(MODELLI.keys())
-    n_run = limite_run or N_RUN
+    run_per_modello = {m: limite_run or n_run(m) for m in modelli_da_usare}
 
-    totale = len(casi) * len(modelli_da_usare) * n_run
-    print(f"{len(casi)} casi, {len(modelli_da_usare)} modelli, {n_run} run -> {totale} combinazioni totali", flush=True)
+    totale = len(casi) * sum(run_per_modello.values())
+    descrizione_run = ", ".join(f"{m}: {k} run" for m, k in run_per_modello.items())
+    print(f"{len(casi)} casi, {descrizione_run} -> {totale} combinazioni totali", flush=True)
 
     completate = 0
     saltate = 0
@@ -230,7 +238,7 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
     modelli_in_pausa = set()
     for percorso_caso in casi:
         for nome_modello in modelli_da_usare:
-            for indice_run in range(1, n_run + 1):
+            for indice_run in range(1, run_per_modello[nome_modello] + 1):
                 if nome_modello in modelli_in_pausa:
                     break
                 try:
