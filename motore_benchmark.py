@@ -30,6 +30,7 @@ N_CAMPIONI = 5  # stesso valore per tutti i modelli, per un confronto equo
 CONTESTO_OLLAMA = 8192  # misurato: prompt fino a ~3700 token reali + risposta; costo in velocita' <= 13%
 MAX_TOKEN_RISPOSTA_OLLAMA = 3072  # senza tetto un modello locale puo' entrare in un ciclo di ripetizioni infinito
 TIMEOUT_OLLAMA_SECONDI = 900
+PAUSA_DOPO_GUASTO_SECONDI = 600  # dopo un run rimandato per guasto del fornitore, prima di passare al successivo
 
 
 def attesa_dopo_errore(errore_testo, tentativo):
@@ -70,6 +71,17 @@ class QuotaGiornalieraEsaurita(Exception):
 def e_limite_giornaliero(errore_testo):
     testo = errore_testo.lower()
     return "429" in testo and ("per day" in testo or "per-day" in testo)
+
+
+class GuastoTemporaneoFornitore(Exception):
+    pass
+
+
+def e_guasto_temporaneo(errore_testo):
+    # Server sovraccarico o in errore, limite al minuto, rete assente: non dice nulla sul modello.
+    testo = errore_testo.lower()
+    return ("429" in testo or "connection error" in testo
+            or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")))
 
 
 def elenco_casi():
@@ -160,6 +172,12 @@ def esegui_run(percorso_caso, nome_modello, indice_run):
                 time.sleep(attesa_dopo_errore(errore_finale, tentativo))
     tempo_totale = time.time() - tempo_inizio
 
+    if errore_finale is not None and e_guasto_temporaneo(errore_finale):
+        # Un guasto del fornitore non e' un errore del modello: nessun risultato salvato,
+        # il run verra' rifatto al prossimo avvio.
+        conn.close()
+        raise GuastoTemporaneoFornitore(errore_finale)
+
     log_buffer = io.StringIO()
     risultato = {
         "caso": id_c,
@@ -206,6 +224,7 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
 
     completate = 0
     saltate = 0
+    rimandate = 0
     modelli_in_pausa = set()
     for percorso_caso in casi:
         for nome_modello in modelli_da_usare:
@@ -218,6 +237,11 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
                     modelli_in_pausa.add(nome_modello)
                     print(f"[{id_caso(percorso_caso)}] {nome_modello}: QUOTA GIORNALIERA ESAURITA, modello in pausa fino al prossimo avvio: {e}", flush=True)
                     break
+                except GuastoTemporaneoFornitore as e:
+                    rimandate += 1
+                    print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: GUASTO DEL FORNITORE dopo {MAX_TENTATIVI} tentativi, run rimandato al prossimo avvio: {e}", flush=True)
+                    time.sleep(PAUSA_DOPO_GUASTO_SECONDI)
+                    continue
                 except Exception as e:
                     print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: ERRORE IMPREVISTO, saltato (verra' ritentato al prossimo avvio): {e}", flush=True)
                     continue
@@ -233,6 +257,8 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
                 print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: {stato} ({risultato['tempo_secondi']}s)", flush=True)
 
     print(f"\nCompletate {completate} nuove combinazioni, {saltate} gia' presenti da run precedenti.", flush=True)
+    if rimandate:
+        print(f"Rimandate {rimandate} combinazioni per guasti temporanei del fornitore: rilanciare per rifarle.", flush=True)
     if modelli_in_pausa:
         print(f"Modelli in pausa per quota giornaliera (rilanciare dopo il reset): {sorted(modelli_in_pausa)}", flush=True)
 
