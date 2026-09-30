@@ -29,7 +29,9 @@ ATTESA_TRA_CHIAMATE_CLOUD = 5
 N_CAMPIONI = 5  # stesso valore per tutti i modelli, per un confronto equo
 CONTESTO_OLLAMA = 8192  # misurato: prompt fino a ~3700 token reali + risposta; costo in velocita' <= 13%
 MAX_TOKEN_RISPOSTA_OLLAMA = 3072  # senza tetto un modello locale puo' entrare in un ciclo di ripetizioni infinito
-TIMEOUT_OLLAMA_SECONDI = 900
+# Solo rete di sicurezza: le risposte infinite le ferma MAX_TOKEN_RISPOSTA_OLLAMA. Llama 3.1 su questo PC
+# genera ~3,5 token/s, quindi arrivare al tetto richiede ~15 minuti (894 s osservati sul caso 1220).
+TIMEOUT_OLLAMA_SECONDI = 1800
 PAUSA_DOPO_GUASTO_SECONDI = 600  # dopo un run rimandato per guasto del fornitore, prima di passare al successivo
 
 
