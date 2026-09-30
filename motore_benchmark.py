@@ -83,9 +83,10 @@ class GuastoTemporaneoFornitore(Exception):
 
 
 def e_guasto_temporaneo(errore_testo):
-    # Server sovraccarico o in errore, limite al minuto, rete assente: non dice nulla sul modello.
+    # Server sovraccarico o in errore, limite al minuto, rete assente, richiesta rimasta appesa oltre il
+    # timeout (tarato ben sopra i tempi di risposta osservati): non dice nulla sul modello.
     testo = errore_testo.lower()
-    return ("429" in testo or "connection error" in testo
+    return ("429" in testo or "connection error" in testo or "timed out" in testo
             or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")))
 
 
