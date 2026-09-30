@@ -1,4 +1,6 @@
+import argparse
 import contextlib
+import ctypes
 import glob
 import io
 import json
@@ -229,5 +231,30 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
         print(f"Modelli in pausa per quota giornaliera (rilanciare dopo il reset): {sorted(modelli_in_pausa)}", flush=True)
 
 
+@contextlib.contextmanager
+def pc_sveglio():
+    """Chiede a Windows di non andare in sospensione finche' il benchmark e' in esecuzione.
+
+    E' una richiesta del programma (come quella dei lettori video), non un cambio di impostazioni:
+    Windows la annulla da solo quando il processo termina. Sui portatili con Modern Standby lo
+    standby parte quando lo schermo si spegne, quindi serve anche tenere acceso lo schermo.
+    Il coperchio chiuso manda comunque in sospensione.
+    """
+    if sys.platform != "win32":
+        yield
+        return
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+    try:
+        yield
+    finally:
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Esegue il benchmark caso x modello x run.")
+    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI),
+                        help="solo questi modelli (per lanciare un processo per fornitore in parallelo)")
+    argomenti = parser.parse_args()
+    with pc_sveglio():
+        main(solo_modelli=argomenti.modelli)
