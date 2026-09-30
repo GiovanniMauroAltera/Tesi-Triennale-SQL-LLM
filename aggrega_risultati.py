@@ -21,7 +21,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import PathPatch, Patch
 from matplotlib.path import Path
 
-from motore_benchmark import CARTELLA_RISULTATI, CASO_DEMO, MODELLI, N_RUN, elenco_casi, id_caso
+from motore_benchmark import CARTELLA_RISULTATI, CASO_DEMO, MODELLI, N_RUN, N_RUN_PER_MODELLO, elenco_casi, id_caso, n_run
 
 CARTELLA_USCITA = "classifica"
 ID_DEMO = id_caso(CASO_DEMO)
@@ -134,7 +134,7 @@ def statistiche(risultati, casi_bird):
             "modello": modello,
             "nome": NOMI_MODELLI.get(modello, modello),
             "run_valutati": n,
-            "run_previsti": len(casi_bird) * N_RUN,
+            "run_previsti": len(casi_bird) * n_run(modello),
             "esatti": esiti.count("esatto"),
             "pct_esatti": 100 * esiti.count("esatto") / n if n else 0.0,
             "esatti_robusti": sum(1 for r in run if esatto_robusto(r)),
@@ -143,7 +143,8 @@ def statistiche(risultati, casi_bird):
             "non_verificabili": sum(1 for r in run if non_verificabile(r)),
             "f1_medio": 100 * statistics.mean(f1(r) for r in run) if n else 0.0,
             "casi_risolti_almeno_una_volta": sum(1 for c in casi_bird if esatti_per_caso[c] > 0),
-            "casi_risolti_sempre": sum(1 for c in casi_bird if run_per_caso[c] == N_RUN and esatti_per_caso[c] == N_RUN),
+            "casi_risolti_sempre": sum(1 for c in casi_bird
+                                       if run_per_caso[c] == n_run(modello) and esatti_per_caso[c] == run_per_caso[c]),
             "casi_totali": len(casi_bird),
             "esiti": {e: esiti.count(e) for e in ESITI},
             "tempo_mediano_s": percentile(tempi, 0.5),
@@ -167,6 +168,15 @@ def fmt_tempo(s):
 
 def pct(x):
     return f"{x:.1f}%".replace(".", ",")
+
+
+def descrizione_run():
+    """Es. "3 run per caso (8 per Gemma 4 31B e Qwen2.5-Coder 7B)"."""
+    per_numero = {}
+    for modello, k in N_RUN_PER_MODELLO.items():
+        per_numero.setdefault(k, []).append(NOMI_MODELLI.get(modello, modello).split(" (")[0])
+    eccezioni = "; ".join(f"{k} per {' e '.join(nomi)}" for k, nomi in per_numero.items())
+    return f"{N_RUN} run per caso" + (f" ({eccezioni})" if eccezioni else "")
 
 
 def scrivi_tabelle(stats, risultati, casi_bird):
@@ -201,7 +211,8 @@ def scrivi_tabelle(stats, risultati, casi_bird):
         "# Classifica del benchmark",
         "",
         f"Casi: {len(casi_bird)} esempi BIRD Mini-Dev (simple, max 2 tabelle, niente risultati a singolo valore), "
-        f"{N_RUN} run per caso.",
+        f"{descrizione_run()}. Le percentuali sono sui run di ciascun modello; *casi risolti in tutti i run* e' "
+        "piu' severo per chi ha piu' run.",
         "",
         "- *Esatto*: il risultato del modello coincide col target (Execution Accuracy di BIRD).",
         "- *Esatto robusto*: esatto anche su 3 copie dei dati di partenza con il 30% delle righe rimosse "
@@ -297,7 +308,7 @@ def sottotitolo_copertura(stats):
     valutati = sum(s["run_valutati"] for s in stats)
     previsti = sum(s["run_previsti"] for s in stats)
     parziale = "" if valutati >= previsti else f" · DATI PARZIALI: {valutati}/{previsti} run"
-    return f"{stats[0]['casi_totali']} casi BIRD, {N_RUN} run per caso{parziale}"
+    return f"{stats[0]['casi_totali']} casi BIRD, {descrizione_run()}{parziale}"
 
 
 # -- figure -----------------------------------------------------------------------------
@@ -333,7 +344,7 @@ def figura_classifica(stats):
 def figura_esiti(stats):
     n = len(stats)
     fig, ax = plt.subplots(figsize=(8, 1.8 + 0.5 * n))
-    fig.subplots_adjust(left=0.30, right=0.97, top=margine_alto(fig, 1.30), bottom=0.35 / fig.get_figheight())
+    fig.subplots_adjust(left=0.30, right=0.97, top=margine_alto(fig, 1.50), bottom=0.35 / fig.get_figheight())
     stile_assi(ax)
     ax.set_xlim(0, 100)
     ax.set_ylim(n - 0.5, -0.5)
@@ -355,7 +366,7 @@ def figura_esiti(stats):
             inizio = fine
     ax.legend(handles=[Patch(color=c, label=e) for e, c in zip(ESITI, COLORI_CATEGORICI)], loc="lower left",
               bbox_to_anchor=(0, 1.0), ncol=3, frameon=False, fontsize=9, handlelength=1, handleheight=1)
-    titolo(fig, "Esito dei run per modello", sottotitolo_copertura(stats) + " · quota sul totale dei run valutati")
+    titolo(fig, "Esito dei run per modello", sottotitolo_copertura(stats) + "\nquota sul totale dei run valutati")
     fig.savefig(os.path.join(CARTELLA_USCITA, "fig_esiti.png"), dpi=200)
     plt.close(fig)
 
@@ -368,6 +379,12 @@ def ordine_casi(casi_bird):
     return sorted(casi_bird, key=chiave)
 
 
+def gradino_esatti(esatti, run):
+    """Indice nella rampa per la quota di run esatti: fino a 1/3, fino a 2/3, oltre (con 3 run: 1, 2, 3 esatti)."""
+    quota = esatti / run
+    return 0 if quota <= 1 / 3 + 1e-9 else 1 if quota <= 2 / 3 + 1e-9 else 2
+
+
 def figura_casi(stats, risultati, casi_bird):
     casi = [ID_DEMO] + ordine_casi(casi_bird)
     modelli = [s["modello"] for s in stats]
@@ -378,12 +395,16 @@ def figura_casi(stats, risultati, casi_bird):
         for col, modello in enumerate(modelli):
             run = [r for r in risultati if r["modello"] == modello and r["caso"] == caso]
             if not run:
-                colore, tratteggio = SUPERFICIE, "////"
-            else:
-                esatti = sum(1 for r in run if esito(r) == "esatto")
-                colore, tratteggio = (NEUTRO if esatti == 0 else RAMPA_ESATTI[min(esatti, N_RUN) - 1]), None
-            ax.add_patch(plt.Rectangle((col, y), 1, 1, facecolor=colore, edgecolor=SUPERFICIE, linewidth=2,
-                                       hatch=tratteggio, hatchcolor=GRIGLIA))
+                ax.add_patch(plt.Rectangle((col, y), 1, 1, facecolor=SUPERFICIE, edgecolor=SUPERFICIE, linewidth=2,
+                                           hatch="////", hatchcolor=GRIGLIA))
+                continue
+            esatti = sum(1 for r in run if esito(r) == "esatto")
+            gradino = None if esatti == 0 else gradino_esatti(esatti, len(run))
+            colore = NEUTRO if gradino is None else RAMPA_ESATTI[gradino]
+            ax.add_patch(plt.Rectangle((col, y), 1, 1, facecolor=colore, edgecolor=SUPERFICIE, linewidth=2))
+            # Il conteggio in ogni cella: il colore da solo non distingue 2/3 da 5/8.
+            inchiostro = SUPERFICIE if gradino == 2 else (TENUE if gradino is None else INCHIOSTRO)
+            ax.text(col + 0.5, y + 0.5, f"{esatti}/{len(run)}", ha="center", va="center", fontsize=6.5, color=inchiostro)
     ax.set_xlim(0, len(modelli))
     ax.set_ylim(len(casi) + 0.5, 0)
     ax.set_xticks([c + 0.5 for c in range(len(modelli))], [NOMI_BREVI.get(m, m) for m in modelli], fontsize=8,
@@ -394,9 +415,11 @@ def figura_casi(stats, risultati, casi_bird):
     for lato in ax.spines.values():
         lato.set_visible(False)
     ax.tick_params(length=0)
-    legenda = [Patch(facecolor=NEUTRO, label=f"0/{N_RUN} esatti")] + [
-        Patch(facecolor=RAMPA_ESATTI[k - 1], label=f"{k}/{N_RUN} esatti") for k in range(1, N_RUN + 1)
-    ] + [Patch(facecolor=SUPERFICIE, edgecolor=SUPERFICIE, hatch="////", hatchcolor=TENUE, label="non ancora eseguito")]
+    legenda = [Patch(facecolor=NEUTRO, label="nessun run esatto"),
+               Patch(facecolor=RAMPA_ESATTI[0], label="fino a 1/3 dei run"),
+               Patch(facecolor=RAMPA_ESATTI[1], label="fino a 2/3"),
+               Patch(facecolor=RAMPA_ESATTI[2], label="oltre 2/3"),
+               Patch(facecolor=SUPERFICIE, edgecolor=SUPERFICIE, hatch="////", hatchcolor=TENUE, label="non ancora eseguito")]
     fig.legend(handles=legenda, loc="lower left", bbox_to_anchor=(0.02, 0.005), ncol=5, frameon=False, fontsize=8,
                handlelength=1, handleheight=1)
     titolo(fig, "Run esatti per caso e modello", sottotitolo_copertura(stats))
@@ -408,7 +431,7 @@ def figura_tempi(stats):
     validi = [s for s in stats if s["tempo_mediano_s"]]
     n = len(validi)
     fig, ax = plt.subplots(figsize=(8, 1.4 + 0.55 * n))
-    fig.subplots_adjust(left=0.30, right=0.93, top=margine_alto(fig, 0.85), bottom=0.40 / fig.get_figheight())
+    fig.subplots_adjust(left=0.30, right=0.93, top=margine_alto(fig, 1.05), bottom=0.40 / fig.get_figheight())
     stile_assi(ax)
     ax.set_xscale("log")
     minimo = min(s["tempo_q1_s"] for s in validi)
@@ -428,7 +451,7 @@ def figura_tempi(stats):
         ax.text(s["tempo_q3_s"] * 1.15, i, f"mediana {fmt_durata(s['tempo_mediano_s'])}", va="center", fontsize=8.5,
                 color=INCHIOSTRO_SECONDARIO)
     titolo(fig, "Tempo per chiamata",
-           sottotitolo_copertura(stats) + " · punto = mediana, linea = 25°-75° percentile · scala logaritmica")
+           sottotitolo_copertura(stats) + "\npunto = mediana, linea = 25°-75° percentile · scala logaritmica")
     fig.savefig(os.path.join(CARTELLA_USCITA, "fig_tempi.png"), dpi=200)
     plt.close(fig)
 
