@@ -97,6 +97,18 @@ def f1(r):
     return (r.get("valutazione") or {}).get("f1", 0.0)
 
 
+def esatto_robusto(r):
+    """True/False dal controllo su dati modificati (verifica_robustezza.py); None se non ancora calcolato."""
+    if esito(r) != "esatto":
+        return False
+    robusta = r.get("valutazione_robusta")
+    return None if robusta is None else robusta["esatto_robusto"]
+
+
+def non_verificabile(r):
+    return esito(r) == "esatto" and (r.get("valutazione_robusta") or {}).get("verificabile") is False
+
+
 def percentile(valori, q):
     if not valori:
         return None
@@ -125,6 +137,10 @@ def statistiche(risultati, casi_bird):
             "run_previsti": len(casi_bird) * N_RUN,
             "esatti": esiti.count("esatto"),
             "pct_esatti": 100 * esiti.count("esatto") / n if n else 0.0,
+            "esatti_robusti": sum(1 for r in run if esatto_robusto(r)),
+            "pct_esatti_robusti": 100 * sum(1 for r in run if esatto_robusto(r)) / n if n else 0.0,
+            "robustezza_mancante": sum(1 for r in run if esatto_robusto(r) is None),
+            "non_verificabili": sum(1 for r in run if non_verificabile(r)),
             "f1_medio": 100 * statistics.mean(f1(r) for r in run) if n else 0.0,
             "casi_risolti_almeno_una_volta": sum(1 for c in casi_bird if esatti_per_caso[c] > 0),
             "casi_risolti_sempre": sum(1 for c in casi_bird if run_per_caso[c] == N_RUN and esatti_per_caso[c] == N_RUN),
@@ -134,10 +150,12 @@ def statistiche(risultati, casi_bird):
             "tempo_q1_s": percentile(tempi, 0.25),
             "tempo_q3_s": percentile(tempi, 0.75),
             "demo_esatti": sum(1 for r in demo if esito(r) == "esatto"),
+            "demo_esatti_robusti": sum(1 for r in demo if esatto_robusto(r)),
             "demo_run": len(demo),
             "demo_f1_medio": 100 * statistics.mean(f1(r) for r in demo) if demo else 0.0,
         })
-    righe.sort(key=lambda s: (-s["pct_esatti"], -s["f1_medio"]))
+    # Metrica piu' severa per prima: un esatto ottenuto copiando i valori del target non regge sui dati modificati.
+    righe.sort(key=lambda s: (-s["pct_esatti_robusti"], -s["pct_esatti"], -s["f1_medio"]))
     return righe
 
 
@@ -154,41 +172,52 @@ def pct(x):
 def scrivi_tabelle(stats, risultati, casi_bird):
     with open(os.path.join(CARTELLA_USCITA, "classifica_modelli.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["posizione", "modello", "run_valutati", "run_previsti", "esatti", "pct_esatti", "f1_medio",
+        w.writerow(["posizione", "modello", "run_valutati", "run_previsti", "esatti_robusti", "pct_esatti_robusti",
+                    "esatti", "pct_esatti", "f1_medio", "esatti_non_verificabili", "robustezza_da_calcolare",
                     "casi_risolti_almeno_una_volta", "casi_risolti_sempre", "casi_totali",
                     *[f"n_{e.replace(' ', '_')}" for e in ESITI],
-                    "tempo_mediano_s", "tempo_q1_s", "tempo_q3_s", "demo_esatti", "demo_run", "demo_f1_medio"])
+                    "tempo_mediano_s", "tempo_q1_s", "tempo_q3_s",
+                    "demo_esatti_robusti", "demo_esatti", "demo_run", "demo_f1_medio"])
         for i, s in enumerate(stats, 1):
-            w.writerow([i, s["nome"], s["run_valutati"], s["run_previsti"], s["esatti"], f"{s['pct_esatti']:.1f}",
-                        f"{s['f1_medio']:.1f}", s["casi_risolti_almeno_una_volta"], s["casi_risolti_sempre"], s["casi_totali"],
+            w.writerow([i, s["nome"], s["run_valutati"], s["run_previsti"], s["esatti_robusti"], f"{s['pct_esatti_robusti']:.1f}",
+                        s["esatti"], f"{s['pct_esatti']:.1f}", f"{s['f1_medio']:.1f}", s["non_verificabili"], s["robustezza_mancante"],
+                        s["casi_risolti_almeno_una_volta"], s["casi_risolti_sempre"], s["casi_totali"],
                         *[s["esiti"][e] for e in ESITI],
                         fmt_tempo(s["tempo_mediano_s"]), fmt_tempo(s["tempo_q1_s"]), fmt_tempo(s["tempo_q3_s"]),
-                        s["demo_esatti"], s["demo_run"], f"{s['demo_f1_medio']:.1f}"])
+                        s["demo_esatti_robusti"], s["demo_esatti"], s["demo_run"], f"{s['demo_f1_medio']:.1f}"])
 
     with open(os.path.join(CARTELLA_USCITA, "dettaglio_casi.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["caso", "modello", "run", "esatti", "f1_medio"])
+        w.writerow(["caso", "modello", "run", "esatti", "esatti_robusti", "f1_medio"])
         for caso in [ID_DEMO] + ordine_casi(casi_bird):
             for modello in MODELLI:
                 run = [r for r in risultati if r["modello"] == modello and r["caso"] == caso]
                 if run:
                     w.writerow([caso, NOMI_MODELLI.get(modello, modello), len(run),
-                                sum(1 for r in run if esito(r) == "esatto"), f"{100 * statistics.mean(f1(r) for r in run):.1f}"])
+                                sum(1 for r in run if esito(r) == "esatto"), sum(1 for r in run if esatto_robusto(r)),
+                                f"{100 * statistics.mean(f1(r) for r in run):.1f}"])
 
     righe = [
         "# Classifica del benchmark",
         "",
         f"Casi: {len(casi_bird)} esempi BIRD Mini-Dev (simple, max 2 tabelle, niente risultati a singolo valore), "
-        f"{N_RUN} run per caso. *Esatto* = il risultato del modello coincide col target (Execution Accuracy di BIRD); "
-        "*F1* = media su precisione e richiamo delle righe, penalizza sia le righe mancanti sia quelle in più.",
+        f"{N_RUN} run per caso.",
         "",
-        "| # | Modello | Run valutati | Esatti | F1 medio | Casi risolti almeno 1 volta | Casi risolti in tutti i run | "
-        "Errori di chiamata | Errori SQL | Risposte troncate | Tempo mediano (s) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "- *Esatto*: il risultato del modello coincide col target (Execution Accuracy di BIRD).",
+        "- *Esatto robusto*: esatto anche su 3 copie dei dati di partenza con il 30% delle righe rimosse "
+        "(`verifica_robustezza.py`). Esclude chi ha ricopiato i valori del target, che il prompt mostra per intero "
+        "quando il risultato ha poche righe. Su 4 casi (ricerche di un singolo elemento) la copiatura non e' rilevabile: "
+        "li' un esatto conta come robusto.",
+        "- *F1*: media su precisione e richiamo delle righe, penalizza sia le righe mancanti sia quelle in più.",
+        "",
+        "| # | Modello | Run valutati | Esatti robusti | Esatti | F1 medio | Casi risolti almeno 1 volta | "
+        "Casi risolti in tutti i run | Errori di chiamata | Errori SQL | Risposte troncate | Tempo mediano (s) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for i, s in enumerate(stats, 1):
         righe.append(
-            f"| {i} | {s['nome']} | {s['run_valutati']}/{s['run_previsti']} | {s['esatti']} ({pct(s['pct_esatti'])}) | "
+            f"| {i} | {s['nome']} | {s['run_valutati']}/{s['run_previsti']} | "
+            f"{s['esatti_robusti']} ({pct(s['pct_esatti_robusti'])}) | {s['esatti']} ({pct(s['pct_esatti'])}) | "
             f"{pct(s['f1_medio'])} | {s['casi_risolti_almeno_una_volta']}/{s['casi_totali']} | "
             f"{s['casi_risolti_sempre']}/{s['casi_totali']} | {s['esiti']['errore di chiamata']} | {s['esiti']['errore SQL']} | "
             f"{s['esiti']['risposta troncata']} | {fmt_tempo(s['tempo_mediano_s'])} |"
@@ -199,11 +228,16 @@ def scrivi_tabelle(stats, risultati, casi_bird):
         "",
         "Il caso originale della tesi (conversione valute con tassi nascosti da dedurre) non entra nella classifica BIRD.",
         "",
-        "| Modello | Run esatti | F1 medio |",
-        "|---|---|---|",
+        "| Modello | Run esatti robusti | Run esatti | F1 medio |",
+        "|---|---|---|---|",
     ]
     for s in stats:
-        righe.append(f"| {s['nome']} | {s['demo_esatti']}/{s['demo_run']} | {pct(s['demo_f1_medio'])} |")
+        righe.append(f"| {s['nome']} | {s['demo_esatti_robusti']}/{s['demo_run']} | {s['demo_esatti']}/{s['demo_run']} | "
+                     f"{pct(s['demo_f1_medio'])} |")
+    mancanti = sum(s["robustezza_mancante"] for s in stats)
+    if mancanti:
+        righe += ["", f"**Attenzione**: {mancanti} run esatti non hanno ancora il controllo di robustezza "
+                      "(eseguire `python verifica_robustezza.py`): nel frattempo contano come non robusti."]
     with open(os.path.join(CARTELLA_USCITA, "classifica.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(righe) + "\n")
 
@@ -270,7 +304,7 @@ def sottotitolo_copertura(stats):
 
 def figura_classifica(stats):
     n = len(stats)
-    fig, ax = plt.subplots(figsize=(8, 1.5 + 0.62 * n))
+    fig, ax = plt.subplots(figsize=(8, 1.5 + 0.85 * n))
     fig.subplots_adjust(left=0.30, right=0.93, top=margine_alto(fig, 1.05), bottom=0.35 / fig.get_figheight())
     stile_assi(ax)
     ax.set_xlim(0, 100)
@@ -278,16 +312,19 @@ def figura_classifica(stats):
     ax.set_yticks(range(n), [s["nome"] for s in stats])
     ax.set_xticks([0, 25, 50, 75, 100], ["0%", "25%", "50%", "75%", "100%"])
     px = scala_px(ax)
-    h = min(0.36, 18 / px[1])
+    h = min(0.26, 18 / px[1])
     gap = 2 / px[1]
-    serie = [("Run esatti", "pct_esatti", COLORI_CATEGORICI[0]), ("F1 medio", "f1_medio", COLORI_CATEGORICI[1])]
+    # Palette validata in quest'ordine visivo (adiacenze blu-verde acqua, verde acqua-arancio).
+    serie = [("Run esatti", "pct_esatti", COLORI_CATEGORICI[0]),
+             ("Esatti anche su dati modificati", "pct_esatti_robusti", COLORI_CATEGORICI[2]),
+             ("F1 medio", "f1_medio", COLORI_CATEGORICI[1])]
     for i, s in enumerate(stats):
         for k, (_, chiave, colore) in enumerate(serie):
-            y = i + (k - 0.5) * (h + gap)
+            y = i + (k - (len(serie) - 1) / 2) * (h + gap)
             barra(ax, 0, s[chiave], y, h, colore, px)
             ax.text(s[chiave] + 1.2, y, f"{s[chiave]:.0f}%", va="center", fontsize=8.5, color=INCHIOSTRO_SECONDARIO)
     ax.legend(handles=[Patch(color=c, label=l) for l, _, c in serie], loc="lower left", bbox_to_anchor=(0, 1.0),
-              ncol=2, frameon=False, fontsize=9, handlelength=1, handleheight=1)
+              ncol=3, frameon=False, fontsize=9, handlelength=1, handleheight=1)
     titolo(fig, "Classifica dei modelli", sottotitolo_copertura(stats))
     fig.savefig(os.path.join(CARTELLA_USCITA, "fig_classifica.png"), dpi=200)
     plt.close(fig)
@@ -407,7 +444,11 @@ def main():
     figura_casi(stats, risultati, casi_bird)
     figura_tempi(stats)
     for i, s in enumerate(stats, 1):
-        print(f"{i}. {s['nome']}: {s['esatti']}/{s['run_valutati']} esatti ({s['pct_esatti']:.1f}%), F1 medio {s['f1_medio']:.1f}%")
+        print(f"{i}. {s['nome']}: {s['esatti_robusti']} robusti, {s['esatti']} esatti su {s['run_valutati']} run, "
+              f"F1 medio {s['f1_medio']:.1f}%")
+    mancanti = sum(s["robustezza_mancante"] for s in stats)
+    if mancanti:
+        print(f"ATTENZIONE: {mancanti} run esatti senza controllo di robustezza: eseguire python verifica_robustezza.py")
     print(f"Tabelle e figure salvate in {CARTELLA_USCITA}/")
 
 
