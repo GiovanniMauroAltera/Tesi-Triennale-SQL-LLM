@@ -114,6 +114,12 @@ def chiama_modello(config, prompt):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
         )
+        if not response.choices:
+            # OpenRouter a volte risponde 200 con l'errore del fornitore nel corpo al posto di "choices":
+            # lo rendiamo leggibile, con il codice nel formato che attesa_dopo_errore riconosce.
+            errore = (response.model_extra or {}).get("error")
+            codice = errore.get("code", "?") if isinstance(errore, dict) else "?"
+            raise RuntimeError(f"Error code: {codice} - risposta senza choices dal fornitore: {errore}")
         contenuto = response.choices[0].message.content
         troncata = response.choices[0].finish_reason == "length"
     if not contenuto:
