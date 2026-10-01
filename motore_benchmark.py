@@ -23,8 +23,9 @@ from common.pipeline import (
 
 N_RUN = 3
 # Run in piu' per avere stime piu' precise: 8 per i due modelli senza limiti giornalieri (30/09),
-# 5 per gpt-oss e Llama (01/10). Nemotron resta a N_RUN per la quota di 50 richieste al giorno.
-N_RUN_PER_MODELLO = {"gemma": 8, "qwen2.5-coder-7b": 8, "gpt-oss-120b": 5, "llama3.1": 5}
+# 5 per Llama (01/10). Nemotron e gpt-oss restano a N_RUN per le quote gratuite giornaliere
+# (OpenRouter 50 richieste, Groq ~57 run).
+N_RUN_PER_MODELLO = {"gemma": 8, "qwen2.5-coder-7b": 8, "llama3.1": 5}
 MAX_TENTATIVI = 5
 ATTESA_RETRY_SECONDI = 10
 ATTESA_RETRY_RATE_LIMIT_SECONDI = 30  # backoff piu' lungo, progressivo, per errori 429
