@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-from common.pipeline import (
+from funzioni_comuni import (
     carica_caso,
     estrai_schema_e_campioni,
     estrai_schema_target,
@@ -12,7 +12,7 @@ from common.pipeline import (
 )
 
 #Caso di test da eseguire
-PERCORSO_CASO = "casi/pc_multivaluta.sqlite"
+PERCORSO_CASO = "caso_PC/pc_multivaluta.sqlite"
 
 conn, cursor, NOMI_TABELLE_SORGENTE, NOME_TABELLA_TARGET = carica_caso(PERCORSO_CASO)
 

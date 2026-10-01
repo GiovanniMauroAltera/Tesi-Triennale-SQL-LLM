@@ -1,0 +1,6 @@
+posizione,modello,prove_valutate,prove_previste,corretti_senza_copiature,pct_corretti_senza_copiature,risultati_corretti,pct_risultati_corretti,correttezza_parziale,corretti_non_verificabili,controllo_copiatura_mancante,casi_risolti_almeno_una_volta,casi_risolti_in_tutte_le_prove,casi_totali,n_risultato_corretto,n_risultato_sbagliato,n_errore_SQL,n_risposta_troncata,n_errore_di_chiamata,tempo_mediano_s,tempo_q1_s,tempo_q3_s,demo_corretti_senza_copiature,demo_risultati_corretti,demo_prove,demo_correttezza_parziale
+1,Gemma 4 31B (Google),240,240,50,20.8,82,34.2,49.1,29,0,14,6,30,82,158,0,0,0,206,144,294,1,1,8,31.2
+2,Nemotron 3 Ultra (OpenRouter),90,90,17,18.9,40,44.4,57.5,9,0,19,7,30,40,48,2,0,0,168,82,272,0,0,3,11.1
+3,gpt-oss-120b (Groq),90,90,10,11.1,24,26.7,40.6,4,0,14,3,30,24,61,4,1,0,6,4,34,0,0,3,0.0
+4,Qwen2.5-Coder 7B (locale),240,240,19,7.9,41,17.1,26.1,2,0,14,3,30,41,129,29,41,0,40,24,110,0,0,8,0.0
+5,Llama 3.1 8B (locale),150,150,2,1.3,2,1.3,3.1,1,0,2,0,30,2,24,76,48,0,141,92,620,0,0,5,0.0

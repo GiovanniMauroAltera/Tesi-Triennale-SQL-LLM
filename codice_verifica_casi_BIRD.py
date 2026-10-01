@@ -3,9 +3,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common.pipeline import carica_caso, esegui_e_stampa, valuta_accuratezza
+from funzioni_comuni import carica_caso, esegui_e_stampa, valuta_accuratezza
 
-CARTELLA_CASI = "casi_bird"
+CARTELLA_CASI = "casi_BIRD"
 
 with open(os.path.join(CARTELLA_CASI, "_manifest.json"), encoding="utf-8") as f:
     manifest = json.load(f)

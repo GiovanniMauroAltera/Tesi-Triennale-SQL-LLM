@@ -5,12 +5,12 @@ import re
 import sqlite3
 import time
 
-from common.pipeline import estrai_schema_e_campioni, costruisci_prompt
+from funzioni_comuni import estrai_schema_e_campioni, costruisci_prompt
 
 CARTELLA_BIRD = "bird-mini-dev"
 PERCORSO_JSON = os.path.join(CARTELLA_BIRD, "mini_dev_sqlite.json")
 CARTELLA_DB = os.path.join(CARTELLA_BIRD, "dev_databases")
-CARTELLA_CASI_OUT = "casi_bird"
+CARTELLA_CASI_OUT = "casi_BIRD"
 
 N_TOTALE = 30
 SEED = 42

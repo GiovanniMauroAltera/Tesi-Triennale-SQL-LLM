@@ -8,8 +8,8 @@ import io
 import json
 import os
 
-from common.pipeline import carica_caso, esegui_e_stampa, valuta_accuratezza
-from motore_benchmark import CARTELLA_RISULTATI, elenco_casi, id_caso
+from funzioni_comuni import carica_caso, esegui_e_stampa, valuta_accuratezza
+from codice_benchmark import CARTELLA_RISULTATI, elenco_casi, id_caso
 
 
 def main():

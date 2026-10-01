@@ -11,7 +11,7 @@ import time
 import httpx
 from openai import OpenAI
 
-from common.pipeline import (
+from funzioni_comuni import (
     carica_caso,
     estrai_schema_e_campioni,
     estrai_schema_target,
@@ -46,9 +46,9 @@ def attesa_dopo_errore(errore_testo, tentativo):
         return ATTESA_RETRY_RATE_LIMIT_SECONDI * tentativo
     return ATTESA_RETRY_SECONDI
 
-CARTELLA_RISULTATI = "risultati_bird"
-CARTELLA_CASI_BIRD = "casi_bird"
-CASO_DEMO = os.path.join("casi", "pc_multivaluta.sqlite")
+CARTELLA_RISULTATI = "risultati_benchmark"
+CARTELLA_CASI_BIRD = "casi_BIRD"
+CASO_DEMO = os.path.join("caso_PC", "pc_multivaluta.sqlite")
 
 MODELLI = {
     "llama3.1": {"provider": "ollama", "model": "llama3.1"},
