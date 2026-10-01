@@ -8,7 +8,7 @@ chi ha copiato i valori fallisce, chi ha trovato una trasformazione coerente coi
 
 Le varianti dipendono solo dal caso (seme fisso), quindi sono identiche per tutti i modelli.
 Si tengono solo varianti in cui la query gold da' un risultato diverso dall'originale, altrimenti
-copiare passerebbe comunque. Aggiunge "valutazione_robusta" ai JSON in risultati_bird/; non
+copiare passerebbe comunque. Aggiunge "valutazione_robusta" ai JSON in risultati_benchmark/; non
 richiama nessun modello e puo' girare mentre il benchmark e' in corso.
 """
 import glob
@@ -17,8 +17,8 @@ import os
 import random
 import time
 
-from common.pipeline import _q, carica_caso, valuta_accuratezza
-from motore_benchmark import CARTELLA_RISULTATI, CASO_DEMO, elenco_casi, id_caso
+from funzioni_comuni import _q, carica_caso, valuta_accuratezza
+from codice_benchmark import CARTELLA_RISULTATI, CASO_DEMO, elenco_casi, id_caso
 
 N_VARIANTI = 3
 FRAZIONE_RIMOSSA = 0.3

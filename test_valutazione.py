@@ -2,9 +2,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common.pipeline import esegui_e_stampa, valuta_accuratezza, stampa_valutazione, carica_caso, estrai_query_sql
+from funzioni_comuni import esegui_e_stampa, valuta_accuratezza, stampa_valutazione, carica_caso, estrai_query_sql
 
-PERCORSO_CASO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "casi", "pc_multivaluta.sqlite")
+PERCORSO_CASO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "caso_PC", "pc_multivaluta.sqlite")
 
 
 def nuovo_caso():

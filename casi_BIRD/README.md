@@ -1,6 +1,6 @@
 # Casi BIRD
 
-Questa cartella contiene, dopo la generazione, 30 casi di test estratti dal dataset [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev) nello stesso formato `.sqlite` + `_caso_info` usato dal caso demo (`casi/pc_multivaluta.sqlite`).
+Questa cartella contiene, dopo la generazione, 30 casi di test estratti dal dataset [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev) nello stesso formato `.sqlite` + `_caso_info` usato dal caso demo (`caso_PC/pc_multivaluta.sqlite`).
 
 I file `.sqlite` **non sono versionati in git** (contengono tabelle reali di BIRD, alcune molto grandi) — vengono rigenerati in locale.
 
@@ -9,7 +9,7 @@ I file `.sqlite` **non sono versionati in git** (contengono tabelle reali di BIR
 1. Scarica BIRD Mini-Dev:
    - JSON con domande/query gold: https://huggingface.co/datasets/birdsql/bird_mini_dev (file `data/mini_dev_sqlite-00000-of-00001.json`) -> salvalo come `bird-mini-dev/mini_dev_sqlite.json`
    - Database originali: scarica `dev.zip` da https://bird-bench.oss-cn-beijing.aliyuncs.com/dev.zip, estrai `dev_20240627/dev_databases.zip`, e da questo estrai solo le cartelle degli 11 database elencati sotto in `bird-mini-dev/dev_databases/`
-2. Esegui `python estrai_casi_bird.py` dalla root del progetto.
+2. Esegui `python estrazione_casi_BIRD.py` dalla root del progetto.
 
 Struttura attesa prima di eseguire lo script:
 ```
@@ -42,7 +42,7 @@ Dei 500 esempi di Mini-Dev, 34 soddisfano tutti i criteri (25 con risultato di p
 
 ## Verifica
 
-`python verifica_estrazione_bird.py` riesegue la query gold di ogni caso estratto e controlla, tramite `valuta_accuratezza`, che il risultato coincida esattamente con la tabella target salvata nel file — conferma che l'estrazione e' fedele all'originale.
+`python codice_verifica_casi_BIRD.py` riesegue la query gold di ogni caso estratto e controlla, tramite `valuta_accuratezza`, che il risultato coincida esattamente con la tabella target salvata nel file — conferma che l'estrazione e' fedele all'originale.
 
 ## Contenuto di ogni file `.sqlite`
 

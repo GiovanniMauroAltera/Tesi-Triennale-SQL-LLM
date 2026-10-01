@@ -1,0 +1,156 @@
+caso,modello,prove,risultati_corretti,corretti_senza_copiature,correttezza_parziale
+pc_multivaluta,Llama 3.1 8B (locale),5,0,0,0.0
+pc_multivaluta,Qwen2.5-Coder 7B (locale),8,0,0,0.0
+pc_multivaluta,Nemotron 3 Ultra (OpenRouter),3,0,0,11.1
+pc_multivaluta,Gemma 4 31B (Google),8,1,1,31.2
+pc_multivaluta,gpt-oss-120b (Groq),3,0,0,0.0
+414_card_games,Llama 3.1 8B (locale),5,0,0,0.0
+414_card_games,Qwen2.5-Coder 7B (locale),8,8,0,100.0
+414_card_games,Nemotron 3 Ultra (OpenRouter),3,3,0,100.0
+414_card_games,Gemma 4 31B (Google),8,8,0,100.0
+414_card_games,gpt-oss-120b (Groq),3,3,0,100.0
+532_codebase_community,Llama 3.1 8B (locale),5,0,0,0.0
+532_codebase_community,Qwen2.5-Coder 7B (locale),8,0,0,0.5
+532_codebase_community,Nemotron 3 Ultra (OpenRouter),3,0,0,0.5
+532_codebase_community,Gemma 4 31B (Google),8,0,0,14.9
+532_codebase_community,gpt-oss-120b (Groq),3,0,0,0.3
+573_codebase_community,Llama 3.1 8B (locale),5,0,0,0.0
+573_codebase_community,Qwen2.5-Coder 7B (locale),8,1,1,12.5
+573_codebase_community,Nemotron 3 Ultra (OpenRouter),3,1,1,33.3
+573_codebase_community,Gemma 4 31B (Google),8,0,0,0.1
+573_codebase_community,gpt-oss-120b (Groq),3,1,0,33.3
+1507_debit_card_specializing,Llama 3.1 8B (locale),5,0,0,0.0
+1507_debit_card_specializing,Qwen2.5-Coder 7B (locale),8,0,0,20.0
+1507_debit_card_specializing,Nemotron 3 Ultra (OpenRouter),3,0,0,0.0
+1507_debit_card_specializing,Gemma 4 31B (Google),8,0,0,0.2
+1507_debit_card_specializing,gpt-oss-120b (Groq),3,0,0,0.0
+1035_european_football_2,Llama 3.1 8B (locale),5,0,0,0.0
+1035_european_football_2,Qwen2.5-Coder 7B (locale),8,0,0,27.9
+1035_european_football_2,Nemotron 3 Ultra (OpenRouter),3,0,0,7.8
+1035_european_football_2,Gemma 4 31B (Google),8,0,0,40.5
+1035_european_football_2,gpt-oss-120b (Groq),3,0,0,51.9
+1044_european_football_2,Llama 3.1 8B (locale),5,1,1,20.0
+1044_european_football_2,Qwen2.5-Coder 7B (locale),8,8,7,100.0
+1044_european_football_2,Nemotron 3 Ultra (OpenRouter),3,2,2,83.3
+1044_european_football_2,Gemma 4 31B (Google),8,7,7,87.5
+1044_european_football_2,gpt-oss-120b (Groq),3,3,3,100.0
+850_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+850_formula_1,Qwen2.5-Coder 7B (locale),8,1,0,12.5
+850_formula_1,Nemotron 3 Ultra (OpenRouter),3,2,0,68.9
+850_formula_1,Gemma 4 31B (Google),8,8,3,100.0
+850_formula_1,gpt-oss-120b (Groq),3,0,0,21.5
+857_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+857_formula_1,Qwen2.5-Coder 7B (locale),8,0,0,0.0
+857_formula_1,Nemotron 3 Ultra (OpenRouter),3,3,3,100.0
+857_formula_1,Gemma 4 31B (Google),8,5,5,70.8
+857_formula_1,gpt-oss-120b (Groq),3,0,0,0.0
+861_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+861_formula_1,Qwen2.5-Coder 7B (locale),8,3,0,47.1
+861_formula_1,Nemotron 3 Ultra (OpenRouter),3,1,0,33.3
+861_formula_1,Gemma 4 31B (Google),8,2,0,25.5
+861_formula_1,gpt-oss-120b (Groq),3,0,0,13.8
+868_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+868_formula_1,Qwen2.5-Coder 7B (locale),8,1,1,12.5
+868_formula_1,Nemotron 3 Ultra (OpenRouter),3,1,1,33.3
+868_formula_1,Gemma 4 31B (Google),8,8,8,100.0
+868_formula_1,gpt-oss-120b (Groq),3,2,2,66.7
+901_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+901_formula_1,Qwen2.5-Coder 7B (locale),8,2,0,26.1
+901_formula_1,Nemotron 3 Ultra (OpenRouter),3,0,0,22.2
+901_formula_1,Gemma 4 31B (Google),8,0,0,9.7
+901_formula_1,gpt-oss-120b (Groq),3,0,0,3.4
+910_formula_1,Llama 3.1 8B (locale),5,1,1,20.5
+910_formula_1,Qwen2.5-Coder 7B (locale),8,0,0,6.2
+910_formula_1,Nemotron 3 Ultra (OpenRouter),3,3,3,100.0
+910_formula_1,Gemma 4 31B (Google),8,8,8,100.0
+910_formula_1,gpt-oss-120b (Groq),3,1,1,46.7
+950_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+950_formula_1,Qwen2.5-Coder 7B (locale),8,2,0,25.2
+950_formula_1,Nemotron 3 Ultra (OpenRouter),3,3,0,100.0
+950_formula_1,Gemma 4 31B (Google),8,7,0,89.2
+950_formula_1,gpt-oss-120b (Groq),3,0,0,3.8
+959_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+959_formula_1,Qwen2.5-Coder 7B (locale),8,0,0,22.1
+959_formula_1,Nemotron 3 Ultra (OpenRouter),3,0,0,44.2
+959_formula_1,Gemma 4 31B (Google),8,0,0,13.5
+959_formula_1,gpt-oss-120b (Groq),3,0,0,4.8
+964_formula_1,Llama 3.1 8B (locale),5,0,0,0.0
+964_formula_1,Qwen2.5-Coder 7B (locale),8,0,0,5.0
+964_formula_1,Nemotron 3 Ultra (OpenRouter),3,0,0,30.5
+964_formula_1,Gemma 4 31B (Google),8,0,0,28.2
+964_formula_1,gpt-oss-120b (Groq),3,0,0,31.3
+978_formula_1,Llama 3.1 8B (locale),5,0,0,5.7
+978_formula_1,Qwen2.5-Coder 7B (locale),8,0,0,46.9
+978_formula_1,Nemotron 3 Ultra (OpenRouter),3,2,0,93.3
+978_formula_1,Gemma 4 31B (Google),8,2,0,82.1
+978_formula_1,gpt-oss-120b (Groq),3,1,0,74.6
+1334_student_club,Llama 3.1 8B (locale),5,0,0,19.4
+1334_student_club,Qwen2.5-Coder 7B (locale),8,0,0,0.0
+1334_student_club,Nemotron 3 Ultra (OpenRouter),3,2,0,77.8
+1334_student_club,Gemma 4 31B (Google),8,0,0,18.5
+1334_student_club,gpt-oss-120b (Groq),3,2,0,71.3
+1357_student_club,Llama 3.1 8B (locale),5,0,0,0.0
+1357_student_club,Qwen2.5-Coder 7B (locale),8,8,7,100.0
+1357_student_club,Nemotron 3 Ultra (OpenRouter),3,1,0,46.7
+1357_student_club,Gemma 4 31B (Google),8,0,0,10.0
+1357_student_club,gpt-oss-120b (Groq),3,1,0,33.3
+1410_student_club,Llama 3.1 8B (locale),5,0,0,10.0
+1410_student_club,Qwen2.5-Coder 7B (locale),8,2,0,62.5
+1410_student_club,Nemotron 3 Ultra (OpenRouter),3,3,0,100.0
+1410_student_club,Gemma 4 31B (Google),8,0,0,50.0
+1410_student_club,gpt-oss-120b (Groq),3,2,0,83.3
+1411_student_club,Llama 3.1 8B (locale),5,0,0,4.7
+1411_student_club,Qwen2.5-Coder 7B (locale),8,0,0,58.3
+1411_student_club,Nemotron 3 Ultra (OpenRouter),3,1,1,81.1
+1411_student_club,Gemma 4 31B (Google),8,0,0,48.4
+1411_student_club,gpt-oss-120b (Groq),3,0,0,58.8
+1422_student_club,Llama 3.1 8B (locale),5,0,0,0.0
+1422_student_club,Qwen2.5-Coder 7B (locale),8,1,1,34.7
+1422_student_club,Nemotron 3 Ultra (OpenRouter),3,2,2,96.3
+1422_student_club,Gemma 4 31B (Google),8,8,8,100.0
+1422_student_club,gpt-oss-120b (Groq),3,1,1,92.6
+764_superhero,Llama 3.1 8B (locale),5,0,0,0.0
+764_superhero,Qwen2.5-Coder 7B (locale),8,1,0,13.1
+764_superhero,Nemotron 3 Ultra (OpenRouter),3,2,0,68.2
+764_superhero,Gemma 4 31B (Google),8,7,0,88.1
+764_superhero,gpt-oss-120b (Groq),3,2,0,68.2
+781_superhero,Llama 3.1 8B (locale),5,0,0,0.0
+781_superhero,Qwen2.5-Coder 7B (locale),8,1,0,16.9
+781_superhero,Nemotron 3 Ultra (OpenRouter),3,0,0,6.2
+781_superhero,Gemma 4 31B (Google),8,0,0,1.1
+781_superhero,gpt-oss-120b (Groq),3,0,0,15.2
+785_superhero,Llama 3.1 8B (locale),5,0,0,0.0
+785_superhero,Qwen2.5-Coder 7B (locale),8,0,0,0.0
+785_superhero,Nemotron 3 Ultra (OpenRouter),3,0,0,17.1
+785_superhero,Gemma 4 31B (Google),8,0,0,0.0
+785_superhero,gpt-oss-120b (Groq),3,0,0,20.0
+1153_thrombosis_prediction,Llama 3.1 8B (locale),5,0,0,0.6
+1153_thrombosis_prediction,Qwen2.5-Coder 7B (locale),8,2,2,25.7
+1153_thrombosis_prediction,Nemotron 3 Ultra (OpenRouter),3,3,3,100.0
+1153_thrombosis_prediction,Gemma 4 31B (Google),8,8,8,100.0
+1153_thrombosis_prediction,gpt-oss-120b (Groq),3,3,3,100.0
+1155_thrombosis_prediction,Llama 3.1 8B (locale),5,0,0,0.0
+1155_thrombosis_prediction,Qwen2.5-Coder 7B (locale),8,0,0,1.3
+1155_thrombosis_prediction,Nemotron 3 Ultra (OpenRouter),3,0,0,40.1
+1155_thrombosis_prediction,Gemma 4 31B (Google),8,0,0,51.7
+1155_thrombosis_prediction,gpt-oss-120b (Groq),3,0,0,34.7
+1157_thrombosis_prediction,Llama 3.1 8B (locale),5,0,0,0.6
+1157_thrombosis_prediction,Qwen2.5-Coder 7B (locale),8,0,0,4.7
+1157_thrombosis_prediction,Nemotron 3 Ultra (OpenRouter),3,0,0,18.7
+1157_thrombosis_prediction,Gemma 4 31B (Google),8,0,0,26.7
+1157_thrombosis_prediction,gpt-oss-120b (Groq),3,0,0,16.4
+1166_thrombosis_prediction,Llama 3.1 8B (locale),5,0,0,10.0
+1166_thrombosis_prediction,Qwen2.5-Coder 7B (locale),8,0,0,0.0
+1166_thrombosis_prediction,Nemotron 3 Ultra (OpenRouter),3,3,0,100.0
+1166_thrombosis_prediction,Gemma 4 31B (Google),8,1,0,45.1
+1166_thrombosis_prediction,gpt-oss-120b (Groq),3,1,0,33.3
+1220_thrombosis_prediction,Llama 3.1 8B (locale),5,0,0,0.0
+1220_thrombosis_prediction,Qwen2.5-Coder 7B (locale),8,0,0,2.1
+1220_thrombosis_prediction,Nemotron 3 Ultra (OpenRouter),3,0,0,27.5
+1220_thrombosis_prediction,Gemma 4 31B (Google),8,0,0,13.8
+1220_thrombosis_prediction,gpt-oss-120b (Groq),3,0,0,5.3
+200_toxicology,Llama 3.1 8B (locale),5,0,0,0.5
+200_toxicology,Qwen2.5-Coder 7B (locale),8,0,0,0.0
+200_toxicology,Nemotron 3 Ultra (OpenRouter),3,2,1,93.3
+200_toxicology,Gemma 4 31B (Google),8,3,3,58.1
+200_toxicology,gpt-oss-120b (Groq),3,1,0,33.7

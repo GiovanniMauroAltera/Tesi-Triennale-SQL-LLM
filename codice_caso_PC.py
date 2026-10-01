@@ -1,9 +1,9 @@
 import os
 import sqlite3
 
-from common.pipeline import crea_dataset_demo
+from funzioni_comuni import crea_dataset_demo
 
-CARTELLA_CASI = "casi"
+CARTELLA_CASI = "caso_PC"
 PERCORSO_DB = os.path.join(CARTELLA_CASI, "pc_multivaluta.sqlite")
 
 
