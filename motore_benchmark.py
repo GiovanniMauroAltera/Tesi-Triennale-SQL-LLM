@@ -222,10 +222,15 @@ def esegui_run(percorso_caso, nome_modello, indice_run):
     return risultato
 
 
-def main(limite_casi=None, limite_run=None, solo_modelli=None):
+def main(limite_casi=None, limite_run=None, solo_modelli=None, parte=None):
     casi = elenco_casi()
     if limite_casi:
         casi = casi[:limite_casi]
+    if parte:
+        # (k, n): solo un caso ogni n a partire dal k-esimo, per dividere un modello lento tra n processi
+        # paralleli senza che due processi facciano mai la stessa combinazione.
+        k, n = parte
+        casi = casi[k - 1::n]
     modelli_da_usare = solo_modelli or list(MODELLI.keys())
     run_per_modello = {m: limite_run or n_run(m) for m in modelli_da_usare}
 
@@ -298,6 +303,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Esegue il benchmark caso x modello x run.")
     parser.add_argument("--modelli", nargs="+", choices=list(MODELLI),
                         help="solo questi modelli (per lanciare un processo per fornitore in parallelo)")
+    parser.add_argument("--parte", metavar="K/N",
+                        help="solo un caso ogni N a partire dal K-esimo (es. 1/2 e 2/2 in due processi paralleli)")
     argomenti = parser.parse_args()
+    parte = tuple(int(x) for x in argomenti.parte.split("/")) if argomenti.parte else None
     with pc_sveglio():
-        main(solo_modelli=argomenti.modelli)
+        main(solo_modelli=argomenti.modelli, parte=parte)
