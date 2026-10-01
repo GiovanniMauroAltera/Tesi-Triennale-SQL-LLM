@@ -1,4 +1,6 @@
+import argparse
 import contextlib
+import ctypes
 import glob
 import io
 import json
@@ -20,6 +22,10 @@ from common.pipeline import (
 )
 
 N_RUN = 3
+# Run in piu' per avere stime piu' precise: 8 per i due modelli senza limiti giornalieri (30/09),
+# 5 per Llama (01/10). Nemotron e gpt-oss restano a N_RUN per le quote gratuite giornaliere
+# (OpenRouter 50 richieste, Groq ~57 run).
+N_RUN_PER_MODELLO = {"gemma": 8, "qwen2.5-coder-7b": 8, "llama3.1": 5}
 MAX_TENTATIVI = 5
 ATTESA_RETRY_SECONDI = 10
 ATTESA_RETRY_RATE_LIMIT_SECONDI = 30  # backoff piu' lungo, progressivo, per errori 429
@@ -27,11 +33,16 @@ ATTESA_TRA_CHIAMATE_CLOUD = 5
 N_CAMPIONI = 5  # stesso valore per tutti i modelli, per un confronto equo
 CONTESTO_OLLAMA = 8192  # misurato: prompt fino a ~3700 token reali + risposta; costo in velocita' <= 13%
 MAX_TOKEN_RISPOSTA_OLLAMA = 3072  # senza tetto un modello locale puo' entrare in un ciclo di ripetizioni infinito
-TIMEOUT_OLLAMA_SECONDI = 900
+# Solo rete di sicurezza: le risposte infinite le ferma MAX_TOKEN_RISPOSTA_OLLAMA. Llama 3.1 su questo PC
+# genera ~3,5 token/s, quindi arrivare al tetto richiede ~15 minuti (894 s osservati sul caso 1220).
+TIMEOUT_OLLAMA_SECONDI = 1800
+PAUSA_DOPO_GUASTO_SECONDI = 600  # dopo un run rimandato per guasto del fornitore, prima di passare al successivo
 
 
 def attesa_dopo_errore(errore_testo, tentativo):
-    if "429" in errore_testo or "rate" in errore_testo.lower():
+    # 429 (rate limit) ed errori 5xx del server tendono a durare qualche minuto: attesa progressiva.
+    testo = errore_testo.lower()
+    if "429" in testo or "rate" in testo or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")):
         return ATTESA_RETRY_RATE_LIMIT_SECONDI * tentativo
     return ATTESA_RETRY_SECONDI
 
@@ -47,6 +58,11 @@ MODELLI = {
     "gpt-oss-120b": {"provider": "groq", "model": "openai/gpt-oss-120b"},
 }
 
+# Tarati sui tempi osservati: Nemotron ha impiegato fino a 29 minuti per una risposta valida,
+# Gemma via Google ~8 minuti. Senza timeout espliciti una richiesta bloccata dal server
+# restava appesa 10 minuti per tentativo (default della libreria openai).
+TIMEOUT_CLOUD_SECONDI = {"openrouter": 2400, "google": 900, "groq": 300}
+
 ENDPOINT_OPENAI_COMPATIBILI = {
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY"),
@@ -61,6 +77,22 @@ class QuotaGiornalieraEsaurita(Exception):
 def e_limite_giornaliero(errore_testo):
     testo = errore_testo.lower()
     return "429" in testo and ("per day" in testo or "per-day" in testo)
+
+
+class GuastoTemporaneoFornitore(Exception):
+    pass
+
+
+def e_guasto_temporaneo(errore_testo):
+    # Server sovraccarico o in errore, limite al minuto, rete assente, richiesta rimasta appesa oltre il
+    # timeout (tarato ben sopra i tempi di risposta osservati): non dice nulla sul modello.
+    testo = errore_testo.lower()
+    return ("429" in testo or "connection error" in testo or "timed out" in testo
+            or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")))
+
+
+def n_run(nome_modello):
+    return N_RUN_PER_MODELLO.get(nome_modello, N_RUN)
 
 
 def elenco_casi():
@@ -97,12 +129,20 @@ def chiama_modello(config, prompt):
         contenuto, troncata = chiama_ollama(config["model"], prompt)
     else:
         base_url, variabile_chiave = ENDPOINT_OPENAI_COMPATIBILI[config["provider"]]
-        client = OpenAI(base_url=base_url, api_key=os.environ[variabile_chiave])
+        # max_retries=0: gli unici tentativi sono i nostri (MAX_TENTATIVI), niente ripetizioni nascoste della libreria.
+        client = OpenAI(base_url=base_url, api_key=os.environ[variabile_chiave],
+                        timeout=TIMEOUT_CLOUD_SECONDI[config["provider"]], max_retries=0)
         response = client.chat.completions.create(
             model=config["model"],
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
         )
+        if not response.choices:
+            # OpenRouter a volte risponde 200 con l'errore del fornitore nel corpo al posto di "choices":
+            # lo rendiamo leggibile, con il codice nel formato che attesa_dopo_errore riconosce.
+            errore = (response.model_extra or {}).get("error")
+            codice = errore.get("code", "?") if isinstance(errore, dict) else "?"
+            raise RuntimeError(f"Error code: {codice} - risposta senza choices dal fornitore: {errore}")
         contenuto = response.choices[0].message.content
         troncata = response.choices[0].finish_reason == "length"
     if not contenuto:
@@ -143,6 +183,12 @@ def esegui_run(percorso_caso, nome_modello, indice_run):
                 time.sleep(attesa_dopo_errore(errore_finale, tentativo))
     tempo_totale = time.time() - tempo_inizio
 
+    if errore_finale is not None and e_guasto_temporaneo(errore_finale):
+        # Un guasto del fornitore non e' un errore del modello: nessun risultato salvato,
+        # il run verra' rifatto al prossimo avvio.
+        conn.close()
+        raise GuastoTemporaneoFornitore(errore_finale)
+
     log_buffer = io.StringIO()
     risultato = {
         "caso": id_c,
@@ -177,22 +223,29 @@ def esegui_run(percorso_caso, nome_modello, indice_run):
     return risultato
 
 
-def main(limite_casi=None, limite_run=None, solo_modelli=None):
+def main(limite_casi=None, limite_run=None, solo_modelli=None, parte=None):
     casi = elenco_casi()
     if limite_casi:
         casi = casi[:limite_casi]
+    if parte:
+        # (k, n): solo un caso ogni n a partire dal k-esimo, per dividere un modello lento tra n processi
+        # paralleli senza che due processi facciano mai la stessa combinazione.
+        k, n = parte
+        casi = casi[k - 1::n]
     modelli_da_usare = solo_modelli or list(MODELLI.keys())
-    n_run = limite_run or N_RUN
+    run_per_modello = {m: limite_run or n_run(m) for m in modelli_da_usare}
 
-    totale = len(casi) * len(modelli_da_usare) * n_run
-    print(f"{len(casi)} casi, {len(modelli_da_usare)} modelli, {n_run} run -> {totale} combinazioni totali", flush=True)
+    totale = len(casi) * sum(run_per_modello.values())
+    descrizione_run = ", ".join(f"{m}: {k} run" for m, k in run_per_modello.items())
+    print(f"{len(casi)} casi, {descrizione_run} -> {totale} combinazioni totali", flush=True)
 
     completate = 0
     saltate = 0
+    rimandate = 0
     modelli_in_pausa = set()
     for percorso_caso in casi:
         for nome_modello in modelli_da_usare:
-            for indice_run in range(1, n_run + 1):
+            for indice_run in range(1, run_per_modello[nome_modello] + 1):
                 if nome_modello in modelli_in_pausa:
                     break
                 try:
@@ -201,6 +254,11 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
                     modelli_in_pausa.add(nome_modello)
                     print(f"[{id_caso(percorso_caso)}] {nome_modello}: QUOTA GIORNALIERA ESAURITA, modello in pausa fino al prossimo avvio: {e}", flush=True)
                     break
+                except GuastoTemporaneoFornitore as e:
+                    rimandate += 1
+                    print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: GUASTO DEL FORNITORE dopo {MAX_TENTATIVI} tentativi, run rimandato al prossimo avvio: {e}", flush=True)
+                    time.sleep(PAUSA_DOPO_GUASTO_SECONDI)
+                    continue
                 except Exception as e:
                     print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: ERRORE IMPREVISTO, saltato (verra' ritentato al prossimo avvio): {e}", flush=True)
                     continue
@@ -216,9 +274,39 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None):
                 print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: {stato} ({risultato['tempo_secondi']}s)", flush=True)
 
     print(f"\nCompletate {completate} nuove combinazioni, {saltate} gia' presenti da run precedenti.", flush=True)
+    if rimandate:
+        print(f"Rimandate {rimandate} combinazioni per guasti temporanei del fornitore: rilanciare per rifarle.", flush=True)
     if modelli_in_pausa:
         print(f"Modelli in pausa per quota giornaliera (rilanciare dopo il reset): {sorted(modelli_in_pausa)}", flush=True)
 
 
+@contextlib.contextmanager
+def pc_sveglio():
+    """Chiede a Windows di non andare in sospensione finche' il benchmark e' in esecuzione.
+
+    E' una richiesta del programma (come quella dei lettori video), non un cambio di impostazioni:
+    Windows la annulla da solo quando il processo termina. Sui portatili con Modern Standby lo
+    standby parte quando lo schermo si spegne, quindi serve anche tenere acceso lo schermo.
+    Il coperchio chiuso manda comunque in sospensione.
+    """
+    if sys.platform != "win32":
+        yield
+        return
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+    try:
+        yield
+    finally:
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Esegue il benchmark caso x modello x run.")
+    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI),
+                        help="solo questi modelli (per lanciare un processo per fornitore in parallelo)")
+    parser.add_argument("--parte", metavar="K/N",
+                        help="solo un caso ogni N a partire dal K-esimo (es. 1/2 e 2/2 in due processi paralleli)")
+    argomenti = parser.parse_args()
+    parte = tuple(int(x) for x in argomenti.parte.split("/")) if argomenti.parte else None
+    with pc_sveglio():
+        main(solo_modelli=argomenti.modelli, parte=parte)
