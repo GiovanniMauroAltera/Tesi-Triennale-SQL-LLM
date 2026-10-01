@@ -1,17 +1,31 @@
-# Casi BIRD
+# I casi presi da BIRD
 
-Questa cartella contiene, dopo la generazione, 30 casi di test estratti dal dataset [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev) nello stesso formato `.sqlite` + `_caso_info` usato dal caso demo (`caso_PC/pc_multivaluta.sqlite`).
+In questa cartella ci sono i 30 casi che ho usato per il benchmark, presi dal dataset [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev). Ogni caso è un piccolo file `.sqlite` che contiene tutto quello che serve: le tabelle di partenza (lo Stato A), la tabella finale (lo Stato B) e qualche informazione in più. Il formato è lo stesso che uso per il caso dei PC (`caso_PC/pc_multivaluta.sqlite`).
 
-I file `.sqlite` **non sono versionati in git** (contengono tabelle reali di BIRD, alcune molto grandi) — vengono rigenerati in locale.
+I file `.sqlite` non li ho caricati su GitHub, perché contengono tabelle reali di BIRD e alcune sono piuttosto grandi: si ricreano sul proprio computer seguendo i passaggi qui sotto. Su GitHub c'è solo `_manifest.json`, che è l'elenco dei 30 casi scelti.
 
-## Come rigenerarli
+## Come ho scelto i casi
 
-1. Scarica BIRD Mini-Dev:
-   - JSON con domande/query gold: https://huggingface.co/datasets/birdsql/bird_mini_dev (file `data/mini_dev_sqlite-00000-of-00001.json`) -> salvalo come `bird-mini-dev/mini_dev_sqlite.json`
-   - Database originali: scarica `dev.zip` da https://bird-bench.oss-cn-beijing.aliyuncs.com/dev.zip, estrai `dev_20240627/dev_databases.zip`, e da questo estrai solo le cartelle degli 11 database elencati sotto in `bird-mini-dev/dev_databases/`
-2. Esegui `python estrazione_casi_BIRD.py` dalla root del progetto.
+Rispetto a BIRD il mio compito è più difficile. In BIRD il modello riceve una domanda scritta a parole (per esempio "quali gare si sono corse a settembre 2005?") e deve scrivere la query; io invece gli do solo i dati di partenza e il risultato finale, e deve capire da solo cosa è stato fatto. Per questo ho tenuto solo i casi che si possono ragionevolmente dedurre guardando i dati:
 
-Struttura attesa prima di eseguire lo script:
+- solo esempi che BIRD considera **semplici** (quelli con l'etichetta "simple");
+- query che usano **al massimo 2 tabelle** di partenza;
+- prompt **non troppo lungo** (al massimo circa 3500 token), così entra nella memoria dei modelli che girano sul mio computer e nei limiti gratuiti dei servizi in cloud;
+- **niente risultati fatti da un solo numero**, come un conteggio: da un numero da solo è impossibile capire quale filtro è stato applicato, perché tantissime query diverse danno lo stesso valore. Ho escluso anche i risultati vuoti.
+
+Dei 500 esempi di BIRD Mini-Dev solo 34 rispettano tutte queste regole: 25 hanno un risultato con più righe e 9 un risultato con una sola riga ma più colonne. Ho preso prima tutti quelli con più righe, che sono i più facili da dedurre, e poi ho completato fino a 30 con quelli a una riga, scelti a caso ma sempre allo stesso modo (con il seme 42), così chiunque rifaccia l'estrazione ottiene esattamente gli stessi casi.
+
+## Come ricreare i casi
+
+1. Scaricare BIRD Mini-Dev:
+   - il file con le domande e le query vere: da https://huggingface.co/datasets/birdsql/bird_mini_dev scaricare `data/mini_dev_sqlite-00000-of-00001.json` e salvarlo come `bird-mini-dev/mini_dev_sqlite.json`;
+   - i database: scaricare `dev.zip` da https://bird-bench.oss-cn-beijing.aliyuncs.com/dev.zip, aprire al suo interno `dev_20240627/dev_databases.zip` ed estrarre in `bird-mini-dev/dev_databases/` solo le cartelle degli 11 database elencati qui sotto.
+2. Dalla cartella principale del progetto lanciare:
+    ```bash
+    python estrazione_casi_BIRD.py
+    ```
+
+Prima di lanciarlo, la cartella `bird-mini-dev/` deve essere fatta così:
 ```
 bird-mini-dev/
   mini_dev_sqlite.json
@@ -29,24 +43,17 @@ bird-mini-dev/
     toxicology/toxicology.sqlite
 ```
 
-## Criteri di selezione
+## Il controllo dei casi
 
-Il nostro compito e' piu' difficile del text-to-SQL originale di BIRD: il modello non vede la domanda in linguaggio naturale, solo i dati di partenza e il risultato. Per questo si usano solo casi semplici e "deducibili":
+Per essere sicuro che i casi siano identici all'originale ho scritto `codice_verifica_casi_BIRD.py`: riesegue la query vera di BIRD su ogni caso e controlla che il risultato sia uguale alla tabella finale salvata nel file. Sui 30 casi il controllo passa sempre.
 
-- solo esempi con difficolta' **simple** (etichetta originale di BIRD);
-- query gold con **al massimo 2 tabelle sorgente**;
-- **prompt piccolo** (stima <= 3500 token, ~4 caratteri/token): entra nel contesto dei modelli locali e nei limiti gratuiti di Groq;
-- **niente risultati ridotti a un singolo valore** (1 riga x 1 colonna, es. un conteggio): da un solo numero non si puo' risalire al filtro applicato, infinite query danno lo stesso valore. Esclusi anche i risultati vuoti.
+```bash
+python codice_verifica_casi_BIRD.py
+```
 
-Dei 500 esempi di Mini-Dev, 34 soddisfano tutti i criteri (25 con risultato di piu' righe, 9 a una riga ma piu' colonne). Si prendono prima tutti quelli con piu' righe (i piu' deducibili), poi si completa fino a 30 con quelli a una riga, scelti a caso con seed fisso (42). Per la riproducibilita' la stima dei token usa campioni fissi (prime righe) invece che casuali. `_manifest.json` elenca i 30 casi scelti, con tabelle, righe del risultato e token stimati.
+## Cosa c'è dentro ogni file
 
-## Verifica
-
-`python codice_verifica_casi_BIRD.py` riesegue la query gold di ogni caso estratto e controlla, tramite `valuta_accuratezza`, che il risultato coincida esattamente con la tabella target salvata nel file — conferma che l'estrazione e' fedele all'originale.
-
-## Contenuto di ogni file `.sqlite`
-
-- Le tabelle sorgente effettivamente referenziate dalla query gold (Stato A).
-- `RISULTATO_ATTESO`: il risultato della query gold, già calcolato (Stato B).
-- `_caso_info`: metadati letti da `carica_caso()` (nomi tabelle sorgente + nome tabella target).
-- `_bird_info`: tracciabilità verso il dataset originale (question_id, db_id, difficulty, domanda, evidenza, query gold) — non viene mai passata al modello, serve solo per la documentazione della tesi.
+- Le tabelle di partenza che servono alla query (lo Stato A).
+- `RISULTATO_ATTESO`, cioè la tabella finale già calcolata (lo Stato B).
+- `_caso_info`, con i nomi delle tabelle di partenza e di quella finale, che il programma usa per caricare il caso.
+- `_bird_info`, con i dati originali di BIRD: numero della domanda, database, difficoltà, domanda scritta a parole, suggerimento e query vera. Queste informazioni **non vengono mai mostrate ai modelli**: servono solo a me per documentare i casi nella tesi.
