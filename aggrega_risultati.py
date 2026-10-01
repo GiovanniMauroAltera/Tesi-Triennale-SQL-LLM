@@ -459,7 +459,8 @@ def figura_tempi(stats):
 def main():
     os.makedirs(CARTELLA_USCITA, exist_ok=True)
     casi_bird = [id_caso(p) for p in elenco_casi() if id_caso(p) != ID_DEMO]
-    risultati = [r for r in carica_risultati() if r["modello"] in MODELLI]
+    # Solo i run previsti per ciascun modello: eventuali run in piu' non sbilanciano i casi.
+    risultati = [r for r in carica_risultati() if r["modello"] in MODELLI and r["run"] <= n_run(r["modello"])]
     stats = statistiche(risultati, casi_bird)
     scrivi_tabelle(stats, risultati, casi_bird)
     figura_classifica(stats)
