@@ -58,13 +58,15 @@ def _descrivi(esito):
             f"{esito['righe_giuste']} giuste (correttezza parziale {esito['correttezza_parziale']:.0%})")
 
 
-def ricostruisci(conn, tabelle_di_partenza, tabella_finale, modelli, secondi_max, correzioni=CORREZIONI):
+def ricostruisci(conn, tabelle_di_partenza, tabella_finale, modelli, secondi_max, correzioni=CORREZIONI, messaggi=None):
     """Chiede la query a tutti i modelli insieme; a chi sbaglia spiega cosa non va e da' un altro tentativo.
 
     Si ferma alla prima query che riproduce la tabella finale senza copiarne i valori.
     Restituisce la proposta migliore e l'elenco di tutte le proposte ricevute.
+    `messaggi`: i messaggi iniziali gia' pronti (li usa il metodo misto), altrimenti li prepara qui.
     """
-    conversazioni = {m: messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale) for m in modelli}
+    messaggi = messaggi or messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale)
+    conversazioni = {m: list(messaggi) for m in modelli}
     tentativo = {m: 1 for m in modelli}
     risposte = queue.Queue()
 

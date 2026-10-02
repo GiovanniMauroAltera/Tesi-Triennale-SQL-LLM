@@ -13,6 +13,7 @@ MAX_CARATTERI_VALORE = 60    # i testi lunghi vengono accorciati: costano token 
 INDIZI = True
 MAX_RIGHE_INDIZIO = 8        # righe mostrate per ogni tabella
 MAX_RIGHE_PER_VALORE = 5     # un valore che compare in piu' righe di cosi' non indica nulla (es. 1, 'Yes')
+MAX_RIGHE_FINALI_CERCATE = 20  # per gli indizi bastano alcune righe finali (il caso 532 ne ha 4430)
 
 
 def _accorcia(valore):
@@ -38,11 +39,12 @@ def descrivi_tabella_di_partenza(conn, tabella):
              f"-- {totale} righe. Le prime {len(esempi)}:", _righe_come_testo(esempi),
              "-- Alcuni valori di ogni colonna:"]
     for colonna in colonne:
-        diversi = conn.execute(f"SELECT COUNT(DISTINCT {nome_sql(colonna)}) FROM {nome_sql(tabella)}").fetchone()[0]
-        limite = MAX_VALORI_COMPLETI if diversi <= MAX_VALORI_COMPLETI else N_VALORI_PER_COLONNA
+        # Basta sapere se i valori diversi sono al massimo 25: contarli tutti su testi lunghi costa secondi.
         valori = [riga[0] for riga in conn.execute(
-            f"SELECT DISTINCT {nome_sql(colonna)} FROM {nome_sql(tabella)} LIMIT {limite}")]
-        quanti = f"tutti i {diversi} valori" if diversi <= MAX_VALORI_COMPLETI else f"{diversi} valori diversi, alcuni"
+            f"SELECT DISTINCT {nome_sql(colonna)} FROM {nome_sql(tabella)} LIMIT {MAX_VALORI_COMPLETI + 1}")]
+        pochi = len(valori) <= MAX_VALORI_COMPLETI
+        valori = valori if pochi else valori[:N_VALORI_PER_COLONNA]
+        quanti = f"tutti i {len(valori)} valori" if pochi else f"piu' di {MAX_VALORI_COMPLETI} valori diversi, alcuni"
         parti.append(f"--   {colonna} ({quanti}): {[_accorcia(v) for v in valori]}")
     return "\n".join(parti)
 
@@ -68,7 +70,7 @@ def descrivi_indizi(conn, tabelle_di_partenza, tabella_finale):
     noi (es. i 3 soci della tabella finale e, collegate dal loro CAP, le righe dei CAP con lo stato).
     Usa solo dati che nell'uso reale ci sono sempre: le tabelle di partenza e la tabella finale.
     """
-    _, righe_finali = leggi_righe(conn, nome_sql(tabella_finale))
+    _, righe_finali = leggi_righe(conn, nome_sql(tabella_finale), MAX_RIGHE_FINALI_CERCATE)
     valori_per_riga = [{v for v in riga if _significativo(v)} for riga in righe_finali]
     tutti_i_valori = set().union(*valori_per_riga) if valori_per_riga else set()
     # Se la tabella finale ha piu' colonne, una riga di partenza conta solo se contiene almeno due valori
@@ -127,17 +129,20 @@ def descrivi_tabella_finale(conn, tabella):
 ISTRUZIONE_DI_SISTEMA = "Rispondi subito con la query SQL. Non scrivere il ragionamento."
 
 
-def messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale):
+def messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale, suggerimenti=""):
     return [{"role": "system", "content": ISTRUZIONE_DI_SISTEMA},
-            {"role": "user", "content": prompt_iniziale(conn, tabelle_di_partenza, tabella_finale)}]
+            {"role": "user", "content": prompt_iniziale(conn, tabelle_di_partenza, tabella_finale, suggerimenti)}]
 
 
-def prompt_iniziale(conn, tabelle_di_partenza, tabella_finale):
+def prompt_iniziale(conn, tabelle_di_partenza, tabella_finale, suggerimenti=""):
+    """`suggerimenti`: testo in piu' del metodo misto (le query trovate dal programma), vuoto di base."""
     stato_a = "\n\n".join(descrivi_tabella_di_partenza(conn, t) for t in tabelle_di_partenza)
     stato_b = descrivi_tabella_finale(conn, tabella_finale)
     indizi = descrivi_indizi(conn, tabelle_di_partenza, tabella_finale) if INDIZI else ""
     sezione_indizi = (f"\nINDIZI - righe delle tabelle di partenza da cui probabilmente nasce lo STATO B "
                       f"(cercale con un filtro: cosa hanno in comune che le altre righe non hanno?)\n{indizi}\n") if indizi else ""
+    if suggerimenti:
+        sezione_indizi += f"\nSUGGERIMENTI DEL PROGRAMMA\n{suggerimenti}\n"
     return f"""In un database SQLite le tabelle di partenza (STATO A) sono state trasformate da una query che non conosciamo nella tabella finale (STATO B). Scrivi quella query.
 
 STATO A - tabelle di partenza
