@@ -117,7 +117,9 @@ def esatto_robusto(r):
 
 
 def non_verificabile(r):
-    return esito(r) == "esatto" and (r.get("valutazione_robusta") or {}).get("verificabile") is False
+    """Esatto in un caso dove i dati modificati non distinguono una copiatura, e senza copiature nel testo."""
+    robusta = r.get("valutazione_robusta") or {}
+    return esito(r) == "esatto" and robusta.get("verificabile") is False and not robusta.get("copiatura_nel_testo")
 
 
 def percentile(valori, q):
@@ -229,10 +231,11 @@ def scrivi_tabelle(stats, risultati, casi_bird):
         "",
         f"- *{MISURA_CORRETTI}*: il risultato della query del modello è identico alla tabella finale "
         "(è la Execution Accuracy usata da BIRD).",
-        f"- *{MISURA_SENZA_COPIATURE}*: il risultato resta corretto anche su 3 copie dei dati di partenza con il 30% "
-        "delle righe tolte (`controllo_copiatura.py`). Esclude chi ha ricopiato i valori della tabella finale, che il "
-        "prompt mostra per intero quando ha poche righe. In 4 casi (ricerche di un singolo elemento) la copiatura non "
-        "si può scoprire: lì un risultato corretto viene tenuto valido.",
+        f"- *{MISURA_SENZA_COPIATURE}*: il risultato è corretto e supera due controlli (`controllo_copiatura.py`), "
+        "che escludono chi ha ricopiato i valori della tabella finale (il prompt la mostra per intero quando ha poche "
+        "righe): resta corretto anche su 3 copie dei dati di partenza con il 30% delle righe tolte, e nel testo della "
+        "query non compaiono scritti a mano almeno metà dei valori di testo della tabella finale. Il secondo controllo "
+        "scopre le copiature unite ai dati veri con un JOIN o un filtro IN (...), che togliendo righe passano inosservate.",
         f"- *{MISURA_PARZIALE}*: punteggio F1 sulle righe (media di precisione e richiamo), premia i risultati quasi "
         "giusti e penalizza sia le righe mancanti sia quelle in più.",
         "",

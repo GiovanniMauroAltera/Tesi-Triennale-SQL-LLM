@@ -8,25 +8,26 @@ All'inizio ho provato questa idea su un solo caso inventato da me (i prezzi di a
 
 | Posizione | Modello | Risultati corretti senza copiature | Risultati corretti | Correttezza parziale | Prove |
 |---|---|---|---|---|---|
-| 1 | Gemma 4 31B (Google) | **20,8%** | 34,2% | 49,1% | 240 |
-| 2 | Nemotron 3 Ultra (OpenRouter) | **18,9%** | 44,4% | 57,5% | 90 |
-| 3 | gpt-oss-120b (Groq) | **11,1%** | 26,7% | 40,6% | 90 |
-| 4 | Qwen2.5-Coder 7B (in locale) | **7,9%** | 17,1% | 26,1% | 240 |
-| 5 | Llama 3.1 8B (in locale) | **1,3%** | 1,3% | 3,1% | 150 |
+| 1 | Gemma 4 31B (Google) | **14,6%** | 34,2% | 49,1% | 240 |
+| 2 | Nemotron 3 Ultra (OpenRouter) | **14,4%** | 44,4% | 57,5% | 90 |
+| 3 | gpt-oss-120b (Groq) | **6,7%** | 26,7% | 40,6% | 90 |
+| 4 | Qwen2.5-Coder 7B (in locale) | **2,5%** | 17,1% | 26,1% | 240 |
+| 5 | Llama 3.1 8B (in locale) | **0,7%** | 1,3% | 3,1% | 150 |
 
-La classifica è ordinata secondo la misura più severa, cioè i risultati corretti senza copiature.
+La classifica è ordinata secondo la misura più severa, cioè i risultati corretti senza copiature. Sui primi due posti però la differenza è minima: Gemma e Nemotron sono praticamente pari.
 
 ![Classifica dei modelli](classifica/fig_classifica.png)
 
 Per giudicare le risposte dei modelli ho usato tre misure, dalla più permissiva alla più severa:
 
 - **Risultati corretti**: eseguo la query scritta dal modello e controllo se il risultato è identico alla tabella finale, riga per riga (l'ordine delle righe non conta e sui numeri tollero piccole differenze di arrotondamento). È la stessa misura che usa BIRD, dove si chiama Execution Accuracy.
-- **Risultati corretti senza copiature**: durante le prove mi sono accorto che alcuni modelli "barano". Siccome nel prompt la tabella finale si vede tutta, quando ha poche righe il modello a volte si limita a ricopiarne i valori a mano (per esempio scrive `SELECT 'Trent','Smith' UNION ALL ...` con i nomi presi dalla tabella finale) invece di capire la trasformazione. Sui dati originali il risultato torna, ma il modello non ha capito niente. Per scoprirlo rieseguo la query del modello e quella vera su 3 copie dei dati da cui ho tolto a caso il 30% delle righe: chi ha capito la trasformazione resta corretto, chi ha copiato no.
+- **Risultati corretti senza copiature**: durante le prove mi sono accorto che alcuni modelli "barano". Siccome nel prompt la tabella finale si vede tutta, quando ha poche righe il modello a volte si limita a ricopiarne i valori a mano (per esempio scrive `SELECT 'Trent','Smith' UNION ALL ...` con i nomi presi dalla tabella finale) invece di capire la trasformazione. Sui dati originali il risultato torna, ma il modello non ha capito niente. Per scoprirlo faccio due controlli. Il primo rilancia la query del modello e quella vera su 3 copie dei dati da cui ho tolto a caso il 30% delle righe: chi ha capito la trasformazione resta corretto, chi ha copiato no. Poi però mi sono accorto che alcuni modelli copiano in modo più furbo: scrivono a mano i valori della tabella finale e poi li "agganciano" ai dati veri con un JOIN, oppure li usano in un filtro come `WHERE date_received IN ('2019-10-02', '2019-09-12')`. In questi casi, togliendo righe, la loro query e quella vera perdono esattamente le stesse righe e il primo controllo non se ne accorge. Il secondo controllo guarda allora direttamente il testo della query: se dentro ci sono scritti a mano almeno metà dei valori di testo della tabella finale, è una copiatura. Un risultato conta come corretto senza copiature solo se supera tutti e due i controlli.
 - **Correttezza parziale**: un voto parziale, utile quando il modello ci va vicino senza fare centro. Tiene conto sia delle righe giuste che il modello ha trovato, sia di quelle sbagliate che ha aggiunto (tecnicamente è il punteggio F1 calcolato sulle righe).
 
 Le cose che mi hanno colpito di più sono queste:
 
-- **Quasi tutti i modelli a volte copiano.** Nemotron è il modello con più risultati corretti (44%), ma meno della metà reggono il controllo sulle copiature, e togliendo quelle scende al secondo posto. Gemma invece è la più "onesta": circa 6 risultati corretti su 10 sono veri. Anche gpt-oss e Qwen copiano spesso.
+- **Tutti i modelli copiano spesso.** Nemotron è il modello con più risultati corretti (44%), ma solo 3 su 10 superano i controlli sulle copiature. Gemma fa un po' meglio, circa 4 su 10, e togliendo le copiature i due modelli finiscono praticamente pari. gpt-oss e Qwen copiano ancora di più: per Qwen solo 6 risultati corretti su 41 sono veri.
+- **A volte è il prompt a spingere a copiare.** La regola che avevo scritto per il caso dei PC (se manca un dato, come un tasso di cambio, crea una tabella di corrispondenze con `SELECT ... UNION ALL`) sui casi di BIRD viene usata per scrivere a mano i valori della tabella finale: gpt-oss, per esempio, lo dichiara proprio in un commento della sua query.
 - **Nemotron però ci va vicino più spesso degli altri:** ha la correttezza parziale più alta (57,5%) ed è quello che ha risolto almeno una volta più casi (19 su 30).
 - **I modelli piccoli sul mio computer vanno molto peggio.** Qwen2.5-Coder, che è specializzato nel codice, se la cava meglio di Llama (17% di risultati corretti contro l'1%), ma tutti e due si bloccano spesso ripetendo la stessa cosa all'infinito.
 - **Le velocità sono molto diverse.** gpt-oss su Groq risponde in pochi secondi (di solito in 6 secondi), mentre Gemma e Nemotron impiegano di solito circa 3 minuti per una risposta.
@@ -49,7 +50,7 @@ Ogni caso l'ho fatto risolvere più volte a ogni modello (8 volte a Gemma e Qwen
 - `estrazione_casi_BIRD.py` sceglie i 30 esempi da BIRD, esegue la query vera e salva ogni caso come file `.sqlite` con dentro lo Stato A e lo Stato B. Ho tenuto solo esempi semplici, con al massimo due tabelle di partenza e senza risultati fatti da un solo numero (da un solo numero non si può capire quale filtro è stato applicato). I criteri sono spiegati meglio in [casi_BIRD/README.md](casi_BIRD/README.md).
 - `codice_verifica_casi_BIRD.py` controlla che i casi salvati siano identici all'originale di BIRD.
 - `codice_benchmark.py` è il cuore del progetto: per ogni caso e ogni modello manda il prompt, esegue l'SQL che riceve indietro, lo valuta e salva il risultato in `risultati_benchmark/` (un file per ogni prova). Se si interrompe riparte da dove era rimasto.
-- `controllo_copiatura.py` fa il controllo sui dati modificati descritto sopra, senza richiamare i modelli.
+- `controllo_copiatura.py` fa i due controlli sulle copiature descritti sopra (sui dati modificati e sul testo della query), senza richiamare i modelli.
 - `codice_classifica.py` raccoglie tutti i risultati e crea la classifica, le tabelle e i grafici nella cartella `classifica/`.
 - `funzioni_comuni.py` contiene le parti usate da tutti gli script: il prompt, l'estrazione dell'SQL dalla risposta del modello, l'esecuzione e la valutazione. `test_valutazione.py` controlla che la valutazione funzioni su casi di cui conosco già il risultato.
 - `ricalcolo_valutazioni.py` ricalcola la valutazione dei risultati già salvati, utile se si cambia il modo di valutare senza dover rifare tutte le prove.
@@ -89,7 +90,7 @@ Lavorando con i servizi gratuiti ho dovuto gestire parecchi imprevisti: server s
 - **Le risposte cambiano da una prova all'altra.** Anche chiedendo ai modelli di essere il più possibile ripetibili (temperatura 0), la stessa domanda può dare risposte diverse: per questo ogni caso è ripetuto più volte.
 - **Pochi casi e tutti semplici.** 30 casi sono un campione piccolo, quindi una differenza di pochi punti percentuali tra due modelli non va presa come una vera differenza.
 - **Più trasformazioni possono essere giuste.** Senza la domanda a parole, in alcuni casi esistono più query diverse che danno lo stesso risultato sui dati (per esempio filtrare per diagnosi invece che per ID del paziente). Il confronto sui risultati le considera tutte corrette.
-- **Il controllo sulle copiature non vale per tutti i casi.** In 4 casi togliere delle righe non cambia mai il risultato vero, quindi lì una copiatura non si può scoprire e un risultato corretto viene tenuto valido.
+- **I controlli sulle copiature non sono perfetti.** In 4 casi togliere delle righe non cambia mai il risultato vero, quindi lì il primo controllo non può scoprire niente e resta solo il secondo. Il secondo, a sua volta, guarda solo i valori di testo: una copiatura fatta solo di numeri gli sfuggirebbe (nei casi di questo benchmark non l'ho mai vista).
 - **I modelli locali a volte si bloccano.** Capita che ripetano la stessa cosa all'infinito: in quel caso taglio la risposta dopo circa 3000 token e la prova conta come sbagliata (è successo in 48 prove su 150 con Llama e in 41 su 240 con Qwen).
 - **I modelli in cloud cambiano nel tempo.** I fornitori li aggiornano senza avvisare: i risultati si riferiscono alle versioni disponibili tra il 29 settembre e il 1 ottobre 2026.
 
