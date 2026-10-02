@@ -43,8 +43,9 @@ def descrivi_suggerimenti(trovate):
             "esattamente le righe da cui nasce lo STATO B:\n" + "\n".join(righe) + "\n"
             "Attenzione: alcune funzionano solo per coincidenza (per esempio un identificativo o un intervallo di numeri "
             "che per caso contiene solo le righe giuste). Scegli la regola che ha piu' senso per il significato delle "
-            "colonne e, se serve, migliorala: i limiti numerici sono il minimo e il massimo trovati nei dati. "
-            "Se servono calcoli, aggiungili tu.")
+            "colonne (i limiti numerici sono il minimo e il massimo trovati nei dati: la regola vera puo' usare un numero "
+            "piu' tondo). Se servono calcoli, aggiungili tu. Non aggiungere condizioni, ORDER BY o LIMIT che non servono: "
+            "un LIMIT con il numero di righe dello STATO B e' come copiarlo.")
 
 
 def ricostruisci_misto(conn, tabelle_di_partenza, tabella_finale, modelli, secondi_max, correzioni=CORREZIONI):

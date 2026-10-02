@@ -57,6 +57,12 @@ def _numero(valore):
     return isinstance(valore, (int, float)) and not isinstance(valore, bool)
 
 
+def _numeri_o_date(valori):
+    presenti = [v for v in valori if v is not None]
+    return bool(presenti) and (all(_numero(v) for v in presenti)
+                               or all(isinstance(v, str) and DATA.match(v) for v in presenti))
+
+
 def _prefisso_comune(testi):
     primo, ultimo = min(testi), max(testi)
     n = 0
@@ -179,13 +185,16 @@ class Contesto:
     "parziale": si puo' cercare il filtro sulle altre colonne, ma non la query completa.
     """
 
-    def __init__(self, base, righe, diversi, posizioni, proiezione, righe_finali):
+    def __init__(self, base, righe, valori_colonna, posizioni, proiezione, righe_finali):
         self.base, self.righe, self.proiezione = base, righe, proiezione
         self.colonne_sql = base["colonne"]
         # Peso di ogni colonna (piu' basso = regola piu' credibile): le colonne "di categoria" (paese, stato,
         # colore) hanno pochi valori diversi; un filtro su un ID o su un codice e' piu' spesso una coincidenza.
-        self.pesi = [n * (10 if IDENTIFICATIVO.search(nome.split(".", 1)[1].strip('"')) else 1)
-                     for nome, n in zip(self.colonne_sql, diversi)]
+        identificativi = [bool(IDENTIFICATIVO.search(nome.split(".", 1)[1].strip('"'))) for nome in self.colonne_sql]
+        self.pesi = [len(v) * (10 if identificativo else 1) for identificativo, v in zip(identificativi, valori_colonna)]
+        # Per i "primi N" si ordina solo per numeri o date (punti, punteggio, data di nascita): i primi N
+        # in ordine di un ID o di un codice ("ORDER BY hero_id LIMIT 4") sono quasi sempre una coincidenza.
+        self.ordinabili = {i for i, v in enumerate(valori_colonna) if not identificativi[i] and _numeri_o_date(v)}
         self.completo = len(posizioni) == len(righe_finali[0])
         self.attese = Counter(tuple(riga[j] for j in posizioni) for riga in righe_finali)
         self.doppioni = any(n > 1 for n in self.attese.values())
@@ -252,14 +261,11 @@ class Contesto:
         for filtro in filtri:
             righe = self.righe if filtro is None else [r for r in self.righe if filtro.funzione(r)]
             for i, nome in enumerate(self.colonne_sql):
-                if filtro is not None and filtro.colonna == i:
+                if (filtro is not None and filtro.colonna == i) or i not in self.ordinabili:
                     continue
                 valide = [r for r in righe if r[i] is not None]
                 for verso, scegli in (("DESC", heapq.nlargest), ("ASC", heapq.nsmallest)):
-                    try:
-                        primi = scegli(n + 1, valide, key=lambda r: r[i])
-                    except TypeError:  # testi e numeri mescolati nella stessa colonna
-                        break
+                    primi = scegli(n + 1, valide, key=lambda r: r[i])
                     if len(primi) > n and primi[n - 1][i] == primi[n][i]:
                         continue  # pari merito al confine: quali righe restano dipende dal caso, non e' una regola
                     primi = primi[:n]
@@ -299,7 +305,7 @@ def _tutti_i_contesti(conn, tabelle_di_partenza, righe_finali, solo_completi):
         if not posizioni or (solo_completi and len(posizioni) < len(candidati)):
             continue
         for proiezione in itertools.islice(itertools.product(*(candidati[j] for j in posizioni)), MAX_PROIEZIONI):
-            contesto = Contesto(base, righe, [len(v) for v in valori_colonna], posizioni, proiezione, righe_finali)
+            contesto = Contesto(base, righe, valori_colonna, posizioni, proiezione, righe_finali)
             if contesto.utile:
                 yield contesto
 
