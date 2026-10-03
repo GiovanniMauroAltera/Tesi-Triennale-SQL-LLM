@@ -34,6 +34,9 @@ MODELLI = {
     # Il modello locale del benchmark, per confrontarlo con il metodo misto (03/10): non e' tra quelli di base
     # perche' sul PC della tesi e' lento (4,9 GB, non sta nella memoria della scheda video).
     "llama3.1": {"fornitore": "ollama", "nome": "llama3.1:latest", "di_base": False},
+    # Qwen3.5 (03/10, scelti dall'utente per provare i modelli locali piu' nuovi): il ragionamento si puo' spegnere.
+    "qwen3.5-4b": {"fornitore": "ollama", "nome": "qwen3.5:4b", "pensa": False, "di_base": False},
+    "qwen3.5-9b": {"fornitore": "ollama", "nome": "qwen3.5:9b", "pensa": False, "di_base": False},
 }
 # I modelli interrogati quando non se ne sceglie nessuno con --modelli.
 MODELLI_DI_BASE = [nome for nome, config in MODELLI.items() if config.get("di_base", True)]
