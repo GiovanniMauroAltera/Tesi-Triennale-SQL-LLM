@@ -26,7 +26,8 @@ MODELLI = {
     "gpt-oss-120b": {"fornitore": "groq", "nome": "openai/gpt-oss-120b"},
     "nemotron": {"fornitore": "openrouter", "nome": "nvidia/nemotron-3-ultra-550b-a55b:free"},
     "gemma": {"fornitore": "google", "nome": "gemma-4-31b-it"},
-    "qwen2.5-coder-7b": {"fornitore": "ollama", "nome": "qwen2.5-coder:7b"},
+    # Sostituito da Qwen3.5 9B tra quelli di base (03/10): con il metodo misto 24 query giuste su 30 contro 22.
+    "qwen2.5-coder-7b": {"fornitore": "ollama", "nome": "qwen2.5-coder:7b", "di_base": False},
     # Al posto di Llama 3.1 (01/10), due versioni di Qwen3 4B (2,5 GB): "instruct" risponde subito,
     # quella base ragiona sempre prima di rispondere (non si puo' spegnere) e le serve un tetto di token piu' alto.
     "qwen3-4b": {"fornitore": "ollama", "nome": "qwen3:4b-instruct"},
@@ -36,7 +37,7 @@ MODELLI = {
     "llama3.1": {"fornitore": "ollama", "nome": "llama3.1:latest", "di_base": False},
     # Qwen3.5 (03/10, scelti dall'utente per provare i modelli locali piu' nuovi): il ragionamento si puo' spegnere.
     "qwen3.5-4b": {"fornitore": "ollama", "nome": "qwen3.5:4b", "pensa": False, "di_base": False},
-    "qwen3.5-9b": {"fornitore": "ollama", "nome": "qwen3.5:9b", "pensa": False, "di_base": False},
+    "qwen3.5-9b": {"fornitore": "ollama", "nome": "qwen3.5:9b", "pensa": False},
 }
 # I modelli interrogati quando non se ne sceglie nessuno con --modelli.
 MODELLI_DI_BASE = [nome for nome, config in MODELLI.items() if config.get("di_base", True)]
