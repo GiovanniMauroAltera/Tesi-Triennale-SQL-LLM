@@ -21,7 +21,7 @@ import time
 
 from codice_principale import CORREZIONI, _accettabile, _descrivi, ricostruisci
 from codice_ricerca_noLLM import cerca_filtri
-from modelli import MODELLI
+from modelli import MODELLI, MODELLI_DI_BASE
 from prompt import messaggi_iniziali
 from verifica import apri_database, leggi_info_caso
 
@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--database", help="un database SQLite qualsiasi")
     parser.add_argument("--partenza", nargs="+", help="le tabelle di partenza (con --database)")
     parser.add_argument("--finale", help="la tabella finale (con --database)")
-    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI), default=list(MODELLI))
+    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI), default=MODELLI_DI_BASE)
     parser.add_argument("--correzioni", type=int, default=CORREZIONI)
     parser.add_argument("--secondi-max", type=int, default=900)
     argomenti = parser.parse_args()

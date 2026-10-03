@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 
-from modelli import MODELLI, ModelloNonDisponibile, chiama
+from modelli import MODELLI, MODELLI_DI_BASE, ModelloNonDisponibile, chiama
 from prompt import estrai_sql, messaggi_iniziali, messaggio_di_correzione
 from verifica import apri_database, leggi_info_caso, verifica
 
@@ -116,7 +116,7 @@ def main():
     parser.add_argument("--database", help="un database SQLite qualsiasi")
     parser.add_argument("--partenza", nargs="+", help="le tabelle di partenza (con --database)")
     parser.add_argument("--finale", help="la tabella finale (con --database)")
-    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI), default=list(MODELLI),
+    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI), default=MODELLI_DI_BASE,
                         help="i modelli da interrogare in parallelo (di base tutti)")
     parser.add_argument("--correzioni", type=int, default=CORREZIONI,
                         help="quante volte un modello puo' correggersi dopo la prima risposta (0 = nessuna)")

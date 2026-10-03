@@ -31,7 +31,12 @@ MODELLI = {
     # quella base ragiona sempre prima di rispondere (non si puo' spegnere) e le serve un tetto di token piu' alto.
     "qwen3-4b": {"fornitore": "ollama", "nome": "qwen3:4b-instruct"},
     "qwen3-4b-ragiona": {"fornitore": "ollama", "nome": "qwen3:4b", "pensa": True, "max_token": 4096},
+    # Il modello locale del benchmark, per confrontarlo con il metodo misto (03/10): non e' tra quelli di base
+    # perche' sul PC della tesi e' lento (4,9 GB, non sta nella memoria della scheda video).
+    "llama3.1": {"fornitore": "ollama", "nome": "llama3.1:latest", "di_base": False},
 }
+# I modelli interrogati quando non se ne sceglie nessuno con --modelli.
+MODELLI_DI_BASE = [nome for nome, config in MODELLI.items() if config.get("di_base", True)]
 
 
 MAX_ATTESE_LIMITE_AL_MINUTO = 6
