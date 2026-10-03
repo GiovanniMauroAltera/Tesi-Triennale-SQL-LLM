@@ -31,7 +31,8 @@ MODELLI = {
     # Al posto di Llama 3.1 (01/10), due versioni di Qwen3 4B (2,5 GB): "instruct" risponde subito,
     # quella base ragiona sempre prima di rispondere (non si puo' spegnere) e le serve un tetto di token piu' alto.
     "qwen3-4b": {"fornitore": "ollama", "nome": "qwen3:4b-instruct"},
-    "qwen3-4b-ragiona": {"fornitore": "ollama", "nome": "qwen3:4b", "pensa": True, "max_token": 4096},
+    # Non tra quelli di base (03/10): sul PC della tesi impiega 6-15 minuti a caso e rallenta gli altri modelli locali.
+    "qwen3-4b-ragiona": {"fornitore": "ollama", "nome": "qwen3:4b", "pensa": True, "max_token": 4096, "di_base": False},
     # Il modello locale del benchmark, per confrontarlo con il metodo misto (03/10): non e' tra quelli di base
     # perche' sul PC della tesi e' lento (4,9 GB, non sta nella memoria della scheda video).
     "llama3.1": {"fornitore": "ollama", "nome": "llama3.1:latest", "di_base": False},
