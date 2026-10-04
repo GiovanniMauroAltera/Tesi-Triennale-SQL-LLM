@@ -2,7 +2,7 @@
 
 Questa è la versione migliorata del progetto della mia tesi ([Tesi-Triennale](https://github.com/GiovanniMauroAltera/Tesi-Triennale)). L'idea resta la stessa: ho le tabelle di partenza di un database e la tabella finale ottenuta con una trasformazione, e voglio ricostruire la query SQL che porta dalle une all'altra.
 
-Nel progetto principale ho misurato quanto sono bravi i modelli linguistici a farlo da soli. Qui ho cercato di trasformarlo in uno strumento che si possa usare davvero: veloce, e che dica chiaramente se la query trovata è affidabile. Ho provato tre strade e le ho confrontate sugli stessi 30 casi di BIRD del benchmark e sul caso dei PC.
+Nel progetto principale ho misurato quanto sono bravi i modelli linguistici a farlo da soli. Qui ho cercato di trasformarlo in uno strumento che si possa usare davvero: veloce, e che dica chiaramente se la query trovata è affidabile. Ho provato tre strade e le ho confrontate sugli stessi 30 casi di BIRD del benchmark e sul caso dei PC, e poi su 45 casi BIRD nuovi che non avevo mai guardato.
 
 ## I tre metodi
 
@@ -27,26 +27,56 @@ Percentuali sui 30 casi BIRD:
 | Originale (benchmark) | gpt-oss | 6,7% | 0% | 6 s |
 | Modelli con gli indizi | Gemma | 37,0% | 29,6% | 120 s |
 | Modelli con gli indizi | Nemotron | 36,7% | 26,7% | 219 s |
-| Modelli con gli indizi | gpt-oss | 20,0% | 20,0% | 4 s |
+| Modelli con gli indizi | gpt-oss | 16,7% | 16,7% | 4 s |
 | Modelli con gli indizi | Qwen3 4B | 16,7% | 6,7% | 14 s |
 | Senza modelli | - | 86,7% | 60,0% | 0,1 s |
 | Misto | Gemma | 86,7% | 63,3% | 69 s |
 | Misto | Nemotron | 86,7% | 63,3% | 30 s |
-| Misto | gpt-oss | 83,3% | 60,0% | 3 s |
-| Misto | Qwen3 4B | 83,3% | 53,3% | 20 s |
+| Misto | gpt-oss | 81,9% | 62,7% | 4 s |
+| Misto | Qwen3 4B | 83,3% | 51,1% | 18 s |
 
 Con tutti i modelli insieme (come funziona davvero il programma), il metodo misto risolve onestamente 26 casi su 30 (20 con la stessa regola della query vera) e la prima risposta valida arriva di solito in circa 3 secondi. Con i soli indizi i casi sono 15 (10); nel benchmark originale, mettendo insieme tutti i modelli e tutte le prove ripetute, erano 10 (5).
 
-Due misure non sono complete perché i servizi gratuiti non hanno risposto in tempo: gpt-oss con gli indizi è misurato su 25 casi (limite giornaliero di Groq) e Gemma con gli indizi su 27 (tre casi su cui i server di Google vanno sempre in errore); le loro percentuali sono sui casi misurati.
+Per gpt-oss e Qwen3 il metodo misto è stato ripetuto più volte (3 prove per caso, ma la terza di gpt-oss è a 22 casi su 30 per i limiti di Groq): i risultati cambiano pochissimo da una prova all'altra. Gemma con gli indizi è misurata su 27 casi, perché su tre casi i server di Google vanno sempre in errore.
 
 Il caso dei PC (prezzi in valute diverse da convertire in dollari) è quello originale della tesi e richiede di dedurre i tassi di cambio. Il metodo senza modelli non lo risolve, perché servono calcoli. Lo risolvono Gemma con gli indizi, Nemotron con gli indizi e Gemma con il metodo misto, trovando i tassi esatti (1,08, 1,25 e 0,0065). Nel benchmark ci era riuscita solo Gemma, in 1 prova su 8.
+
+### I modelli sul mio computer
+
+Con il metodo misto ho provato anche i modelli locali (una prova per caso, tre per Qwen3 4B e Llama). "Scritte dal modello" sono le query giuste scritte dal modello stesso, senza contare quelle in cui ha sbagliato ed è rimasta la query del programma.
+
+| Modello | Dimensione | Onesti | Scritte dal modello | Stessa regola della query vera | Tempo mediano |
+|---|---|---|---|---|---|
+| Qwen3.5 9B | 6,6 GB | 86,7% | 24 su 30 | 56,7% | 40 s |
+| Qwen3 4B | 2,5 GB | 83,3% | 21 su 30 | 51,1% | 18 s |
+| Llama 3.1 8B | 4,9 GB | 83,3% | 12 su 30 | 55,6% | 29 s |
+| Qwen2.5-coder 7B | 4,7 GB | 80,0% | 22 su 30 | 56,7% | 27 s |
+| Qwen3.5 4B | 3,4 GB | 76,7% | 20 su 30 | 53,3% | 25 s |
+
+Nel benchmark Llama aveva lo 0,7% di risposte oneste in 141 secondi e Qwen2.5-coder il 2,5% in 40 secondi. Il migliore in locale è Qwen3.5 9B, che scrive da solo quasi quanto i modelli grandi online ma è più lento; Qwen3 4B è il compromesso migliore tra velocità e risultati. Llama sbaglia spesso perché allarga il filtro che gli propone il programma invece di usarlo com'è. Nessun modello locale risolve il caso dei PC.
+
+### La prova su casi nuovi
+
+Le regole del metodo senza modelli le avevo messe a punto guardando proprio i 30 casi del benchmark, quindi i risultati sopra potevano essere ottimistici. Per controllarlo ho preso 45 casi BIRD mai usati (15 "simple" come i 30 originali e 30 "moderate", più difficili), con gli stessi criteri dell'estrazione originale tranne il limite sulla lunghezza del prompt, e ho lasciato il codice com'era.
+
+| Metodo | Modello | Onesti (45 casi) | Stessa regola della query vera |
+|---|---|---|---|
+| Modelli senza indizi | Qwen3 4B | 2,2% | 0% |
+| Modelli con gli indizi | Gemma | 11,1% | 6,7% |
+| Modelli con gli indizi | Qwen3 4B | 8,9% | 0% |
+| Senza modelli | - | 26,7% | 15,6% |
+| Misto | Gemma | 28,9% | 20,0% |
+| Misto | Qwen3 4B | 26,7% | 15,6% |
+
+I risultati sono molto più bassi: i casi nuovi sono più difficili (raggruppamenti, sottoquery, condizioni con OR, calcoli) e i 30 originali erano davvero favorevoli al metodo senza modelli. L'ordine però resta lo stesso: il metodo misto è il migliore, gli indizi aiutano, e i modelli da soli quasi non ci riescono. Gemma senza indizi è misurata solo su 10 casi (nessuno risolto), per gli errori continui dei server di Google.
 
 ## Cosa ho capito
 
 - Il problema principale dei modelli non era scrivere l'SQL ma trovare il filtro: senza vedere le righe giuste dovevano indovinarlo. Mostrare gli indizi raddoppia i risultati.
 - Sui casi di BIRD, che sono quasi tutti "prendi queste righe con questo filtro", un programma che prova le regole una per una fa già quasi tutto il lavoro. Il modello serve soprattutto quando ci sono calcoli da fare (come nel caso dei PC) e per scegliere tra regole che funzionano tutte sui dati quella che ha senso.
 - Quando la tabella finale ha una sola riga quasi ogni colonna di quella riga funziona come filtro, e nessun metodo può sapere quale fosse quella "vera": è il limite che resta.
-- Attenzione: le regole del metodo senza modelli le ho messe a punto guardando proprio questi 30 casi, quindi i suoi risultati sono probabilmente un po' ottimistici. Per esserne sicuri andrebbero provati su casi nuovi.
+- Le regole del metodo senza modelli le ho messe a punto sui 30 casi del benchmark: sui casi nuovi passa dall'87% al 27%. Il vantaggio del metodo misto sugli altri metodi però resta anche lì.
+- Per migliorare ancora bisognerebbe insegnare al programma i raggruppamenti (GROUP BY con conteggi e somme), perché è lì che sui casi nuovi si ferma quasi sempre.
 
 ## I file
 
@@ -66,6 +96,6 @@ python codice_misto.py --database miei_dati.sqlite --partenza TABELLA_A TABELLA_
 python codice_ricerca_noLLM.py --caso casi_BIRD/1334_student_club.sqlite
 ```
 
-Con `--modelli` si sceglie quali modelli usare e con `--correzioni` quanti tentativi di correzione dare. Le chiavi dei servizi in cloud vanno salvate come variabili d'ambiente (`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GOOGLE_API_KEY`), mai nel codice; per il modello locale serve [Ollama](https://ollama.com/) con `qwen3:4b-instruct`. Tutti i servizi usati sono gratuiti.
+Con `--modelli` si sceglie quali modelli usare e con `--correzioni` quanti tentativi di correzione dare. Le chiavi dei servizi in cloud vanno salvate come variabili d'ambiente (`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GOOGLE_API_KEY`), mai nel codice; per i modelli locali serve [Ollama](https://ollama.com/) con `qwen3:4b-instruct` e `qwen3.5:9b`. I modelli usati di base sono gpt-oss, Nemotron, Gemma, Qwen3 4B e Qwen3.5 9B; gli altri (Llama 3.1, Qwen2.5-coder, Qwen3.5 4B, Qwen3 4B che ragiona) si scelgono con `--modelli`. Tutti i servizi usati sono gratuiti.
 
-I 30 casi di BIRD in `casi_BIRD/` non sono su GitHub (contengono tabelle reali, alcune grandi): si rigenerano con gli script del progetto principale.
+I casi di BIRD in `casi_BIRD/` e `casi_BIRD_nuovi/` non sono su GitHub (contengono tabelle reali, alcune grandi): si rigenerano con gli script del progetto principale.
