@@ -2,7 +2,7 @@
 
 Questa è la versione migliorata del progetto della mia tesi ([Tesi-Triennale](https://github.com/GiovanniMauroAltera/Tesi-Triennale)). L'idea resta la stessa: ho le tabelle di partenza di un database e la tabella finale ottenuta con una trasformazione, e voglio ricostruire la query SQL che porta dalle une all'altra.
 
-Nel progetto principale ho misurato quanto sono bravi i modelli linguistici a farlo da soli. Qui ho cercato di trasformarlo in uno strumento che si possa usare davvero: veloce, e che dica chiaramente se la query trovata è affidabile. Ho provato tre strade e le ho confrontate sugli stessi 30 casi di BIRD del benchmark e sul caso dei PC, e poi su due gruppi di 45 casi BIRD che non avevo mai guardato.
+Nel progetto principale ho misurato quanto sono bravi i modelli linguistici a farlo da soli. Qui ho cercato di trasformarlo in uno strumento che si possa usare davvero: veloce, e che dica chiaramente se la query trovata è affidabile. Ho provato tre strade e le ho confrontate sugli stessi 30 casi di BIRD del benchmark e sul caso dei PC, e poi su 45 casi BIRD nuovi che non avevo mai guardato.
 
 ## I tre metodi
 
@@ -70,27 +70,12 @@ Le regole del metodo senza modelli le avevo messe a punto guardando proprio i 30
 
 I risultati sono molto più bassi: i casi nuovi sono più difficili (raggruppamenti, sottoquery, condizioni con OR, calcoli) e i 30 originali erano davvero favorevoli al metodo senza modelli. L'ordine però resta lo stesso: il metodo misto è il migliore, gli indizi aiutano, e i modelli da soli quasi non ci riescono. Gemma senza indizi è misurata solo su 10 casi (nessuno risolto), per gli errori continui dei server di Google.
 
-### Un tentativo che non ha funzionato: i raggruppamenti
-
-Sui 45 casi nuovi il programma si fermava soprattutto dove la query vera usa raggruppamenti (GROUP BY con COUNT o SUM, HAVING, i primi N gruppi). Ho provato a insegnarglieli come regole generali, valide per qualsiasi database, e per misurarli in modo onesto ho preso un terzo gruppo di 45 casi BIRD mai visti (30 "moderate" e 15 "challenging") senza toccare il codice dopo averli visti.
-
-| Metodo | Prima dei raggruppamenti | Con i raggruppamenti |
-|---|---|---|
-| Qwen3 4B senza indizi | 2,2% | - |
-| Qwen3 4B con gli indizi | 2,2% | - |
-| Senza modelli | 28,9% | 26,7% |
-| Misto con Qwen3 4B | 24,4% | 24,4% |
-| Misto con Qwen3.5 9B | 26,7% | 24,4% |
-
-Sui casi mai visti i raggruppamenti non hanno risolto niente in più e hanno reso la ricerca più lenta (su un database molto grande scadeva il tempo prima di trovare il filtro semplice), quindi li ho tolti. Nei casi veri i raggruppamenti "puliti" sono rari: le query mescolano raggruppamenti, sottoquery e calcoli. I risultati di questo terzo gruppo confermano comunque l'ordine dei metodi: i modelli da soli o con gli indizi quasi non ci riescono, la ricerca delle regole sì.
-
 ## Cosa ho capito
 
 - Il problema principale dei modelli non era scrivere l'SQL ma trovare il filtro: senza vedere le righe giuste dovevano indovinarlo. Mostrare gli indizi raddoppia i risultati.
 - Sui casi di BIRD, che sono quasi tutti "prendi queste righe con questo filtro", un programma che prova le regole una per una fa già quasi tutto il lavoro. Il modello serve soprattutto quando ci sono calcoli da fare (come nel caso dei PC) e per scegliere tra regole che funzionano tutte sui dati quella che ha senso.
 - Quando la tabella finale ha una sola riga quasi ogni colonna di quella riga funziona come filtro, e nessun metodo può sapere quale fosse quella "vera": è il limite che resta.
 - Le regole del metodo senza modelli le ho messe a punto sui 30 casi del benchmark: sui casi nuovi passa dall'87% al 27%. Il vantaggio del metodo misto sugli altri metodi però resta anche lì.
-- Aggiungere al programma regole pensate guardando dei casi è rischioso: i raggruppamenti sembravano utili sui casi da cui li avevo ricavati e non lo erano su casi mai visti. Ogni miglioramento va misurato su casi nuovi, perché lo strumento deve funzionare sulle tabelle di un utente qualsiasi.
 
 ## I file
 
@@ -112,4 +97,4 @@ python codice_ricerca_noLLM.py --caso casi_BIRD/1334_student_club.sqlite
 
 Con `--modelli` si sceglie quali modelli usare e con `--correzioni` quanti tentativi di correzione dare. Le chiavi dei servizi in cloud vanno salvate come variabili d'ambiente (`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GOOGLE_API_KEY`), mai nel codice; per i modelli locali serve [Ollama](https://ollama.com/) con `qwen3:4b-instruct` e `qwen3.5:9b`. I modelli usati di base sono gpt-oss, Nemotron, Gemma, Qwen3 4B e Qwen3.5 9B; gli altri (Llama 3.1, Qwen2.5-coder, Qwen3.5 4B, Qwen3 4B che ragiona) si scelgono con `--modelli`. Tutti i servizi usati sono gratuiti.
 
-I casi di BIRD in `casi_BIRD/`, `casi_BIRD_nuovi/` e `casi_BIRD_mai_visti/` non sono su GitHub (contengono tabelle reali, alcune grandi): si rigenerano con gli script del progetto principale.
+I casi di BIRD in `casi_BIRD/` e `casi_BIRD_nuovi/` non sono su GitHub (contengono tabelle reali, alcune grandi): si rigenerano con gli script del progetto principale.
