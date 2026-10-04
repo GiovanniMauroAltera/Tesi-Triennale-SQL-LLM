@@ -5,15 +5,11 @@ Serve come confronto con i modelli, ed e' il primo passo del metodo misto (codic
    (anche unendo le due tabelle con il loro collegamento);
 2. divide le righe di partenza in "giuste" (finiscono nella tabella finale) e "sbagliate";
 3. prova i filtri dal piu' semplice al piu' complicato e tiene quelli che lasciano passare tutte le righe
-   giuste e nessuna sbagliata. Ogni query trovata e' verificata come quelle dei modelli;
-4. solo se nessun filtro basta, prova le regole sui gruppi di righe (GROUP BY): una colonna che e' un
-   conteggio, una somma, una media, un minimo o un massimo per gruppo; i gruppi scelti con una soglia su
-   uno di questi valori (HAVING); i primi N gruppi in ordine di uno di questi valori.
+   giuste e nessuna sbagliata. Ogni query trovata e' verificata come quelle dei modelli.
 
-Sono tutte costruzioni generali dell'SQL: nessuna regola parla di tabelle o valori particolari, e le soglie
-si ricavano ogni volta dai dati. Non sa fare altri calcoli (per esempio tra due colonne) ne' dedurre valori
-che non sono nei dati, come un tasso di cambio. E puo' trovare una regola che funziona per coincidenza
-(un intervallo di CAP al posto dello stato): per questo le regole semplici vengono provate per prime.
+Non sa fare calcoli (conteggi, somme, medie) ne' dedurre valori che non sono nei dati: in quei casi trova
+al massimo il filtro, senza la query completa. E puo' trovare una regola che funziona per coincidenza
+(un intervallo di CAP al posto dello stato): per questo i filtri semplici vengono provati per primi.
 
 Come si usa:
   python codice_ricerca_noLLM.py --caso casi_BIRD/1334_student_club.sqlite
@@ -23,7 +19,6 @@ import argparse
 import bisect
 import heapq
 import itertools
-import math
 import random
 import re
 import time
@@ -46,19 +41,10 @@ IDENTIFICATIVO = re.compile(r'(^|_)id$|(^|[a-z_])(Id|ID)$')  # id, member_id, ci
 # I livelli delle regole, dal piu' semplice. Ogni livello si prova su tutte le tabelle prima di passare al
 # successivo: cosi' "state = 'Illinois'" (tabella collegata) viene prima di un intervallo di CAP che funziona per caso.
 NESSUN_FILTRO, UGUALE, PARTE, DUE_UGUALI, INTERVALLO, ELENCO, DUE_REGOLE, PRIMI_N = range(8)
-# Dopo le regole sulle righe, quelle sui gruppi di righe: si provano solo se le altre non bastano.
-GRUPPI_CALCOLO, GRUPPI_SOGLIA, GRUPPI_PRIMI = range(8, 11)
 NOMI_DEI_LIVELLI = ["nessun filtro", "colonna = valore", "parte di un valore (anno, mese, inizio) o valore non vuoto",
-                    "due condizioni '='", "intervallo di numeri", "elenco di valori", "due condizioni", "primi N in ordine",
-                    "conteggio, somma o media per gruppo (GROUP BY)", "gruppi scelti con una soglia (HAVING)",
-                    "primi N gruppi in ordine"]
-MAX_FILTRI_PER_GRUPPI = 12        # filtri sulle righe provati prima di raggruppare
-TOLLERANZA = 0.01                 # come verifica.py: i numeri calcolati possono differire per arrotondamento
+                    "due condizioni '='", "intervallo di numeri", "elenco di valori", "due condizioni", "primi N in ordine"]
 
 Regola = namedtuple("Regola", "livello colonna sql funzione")
-# Una query candidata: WHERE, coda (GROUP BY / HAVING / ORDER BY / LIMIT), SELECT diversa da quella di base
-# (con i conteggi o le somme), e se e' completa (da verificare sulla tabella finale) o solo un filtro.
-Candidata = namedtuple("Candidata", "peso condizione coda select completa")
 
 
 def letterale(valore):
@@ -75,41 +61,6 @@ def _numeri_o_date(valori):
     presenti = [v for v in valori if v is not None]
     return bool(presenti) and (all(_numero(v) for v in presenti)
                                or all(isinstance(v, str) and DATA.match(v) for v in presenti))
-
-
-def _uguali(a, b):
-    if _numero(a) and _numero(b):
-        return math.isclose(a, b, rel_tol=TOLLERANZA, abs_tol=1e-9)
-    return a == b
-
-
-def _numeri_di(righe, i):
-    return [r[i] for r in righe if _numero(r[i])]
-
-
-def _media(numeri):
-    return sum(numeri) / len(numeri) if numeri else None
-
-
-def _somma(numeri):
-    return sum(numeri) if numeri else None
-
-
-def aggregati_possibili(colonne_sql, numeriche):
-    """I calcoli da provare su ogni gruppo di righe: (sql, funzione sulle righe del gruppo, colonna o -1).
-
-    Seguono le regole dell'SQL: COUNT(*) conta le righe, gli altri ignorano i valori vuoti.
-    """
-    aggregati = [("COUNT(*)", len, -1)]
-    aggregati += [(f"COUNT(DISTINCT {nome})", lambda rr, i=i: len({r[i] for r in rr if r[i] is not None}), i)
-                  for i, nome in enumerate(colonne_sql)]
-    for i in sorted(numeriche):
-        nome = colonne_sql[i]
-        aggregati += [(f"SUM({nome})", lambda rr, i=i: _somma(_numeri_di(rr, i)), i),
-                      (f"AVG({nome})", lambda rr, i=i: _media(_numeri_di(rr, i)), i),
-                      (f"MIN({nome})", lambda rr, i=i: min(_numeri_di(rr, i), default=None), i),
-                      (f"MAX({nome})", lambda rr, i=i: max(_numeri_di(rr, i), default=None), i)]
-    return aggregati
 
 
 def _prefisso_comune(testi):
@@ -134,14 +85,6 @@ def _nomi_compatibili(colonna_a, colonna_b):
     return bool((a & b) - {"id"})
 
 
-def _riferimenti_per_nome(colonne, altra_tabella, colonne_altra):
-    """Coppie (colonna, chiave dell'altra tabella) in cui il nome della colonna richiama l'altra tabella."""
-    nome = altra_tabella.lower()
-    chiavi = [c for c in colonne_altra if c.lower() in ("id", f"{nome}_id", f"{nome}id")]
-    return [(c, chiave) for c in colonne for chiave in chiavi
-            if nome in _parole(c) and c.lower() != chiave.lower()]
-
-
 def basi_possibili(conn, tabelle):
     """Dove cercare: ogni tabella da sola, e le coppie unite dai loro collegamenti."""
     basi = [{"from": f"{nome_sql(t)} AS t0", "colonne": [f"t0.{nome_sql(c)}" for c in colonne_di(conn, t)]}
@@ -156,10 +99,9 @@ def basi_possibili(conn, tabelle):
         # nell'altra tabella e chiavi_di_collegamento, che ne chiede l'80%, non le riconosce.
         colonne_a, colonne_b = colonne_di(conn, a), colonne_di(conn, b)
         collegamenti += [(ca, cb) for ca in colonne_a for cb in colonne_b if ca.lower() == cb.lower()]
-        # E i riferimenti per nome, che valgono anche quando i valori in comune sono pochi: una colonna che
-        # contiene il nome dell'altra tabella (alignment_id, link_to_member) va alla sua chiave (id, member_id).
-        collegamenti += [(ca, cb) for ca, cb in _riferimenti_per_nome(colonne_a, b, colonne_b)]
-        collegamenti += [(ca, cb) for cb, ca in _riferimenti_per_nome(colonne_b, a, colonne_a)]
+        # E i nomi del tipo superhero.alignment_id -> alignment.id (tabelle piccole, che l'altra regola scarta).
+        collegamenti += [(ca, "id") for ca in colonne_a if "id" in colonne_b and ca.lower() in (f"{b.lower()}_id", f"{b.lower()}id")]
+        collegamenti += [("id", cb) for cb in colonne_b if "id" in colonne_a and cb.lower() in (f"{a.lower()}_id", f"{a.lower()}id")]
         for ca, cb in dict.fromkeys(collegamenti):
             basi.append({"from": f"{nome_sql(a)} AS t0 JOIN {nome_sql(b)} AS t1 ON t0.{nome_sql(ca)} = t1.{nome_sql(cb)}",
                          "colonne": [f"t0.{nome_sql(c)}" for c in colonne_di(conn, a)]
@@ -254,14 +196,6 @@ class Contesto:
         # in ordine di un ID o di un codice ("ORDER BY hero_id LIMIT 4") sono quasi sempre una coincidenza.
         self.ordinabili = {i for i, v in enumerate(valori_colonna) if not identificativi[i] and _numeri_o_date(v)}
         self.completo = len(posizioni) == len(righe_finali[0])
-        self.posizioni, self.righe_finali = posizioni, righe_finali
-        self.calcolate = []  # per i GROUP BY: le colonne finali che sono un conteggio o una somma per gruppo
-        self.solo_gruppi = False  # contesto creato solo per i GROUP BY (chiave diversa da quella normale)
-        self.numeriche = {i for i, v in enumerate(valori_colonna)
-                          if v - {None} and all(_numero(x) for x in v if x is not None)}
-        self.aggregati = aggregati_possibili(self.colonne_sql, self.numeriche)
-        self.scadenza = math.inf
-        self._gruppi = {}
         self.attese = Counter(tuple(riga[j] for j in posizioni) for riga in righe_finali)
         self.doppioni = any(n > 1 for n in self.attese.values())
         giuste = [r for r in righe if self.proietta(r) in self.attese]
@@ -300,121 +234,22 @@ class Contesto:
         return len({self.chiavi_giuste[k] for k in passano}) == len(self.attese)
 
     def condizioni(self, livello):
-        """Le query candidate di un livello (Candidata), gia' controllate in Python sui dati."""
+        """Le condizioni di un livello che lasciano passare solo le righe giuste: (peso, WHERE, ORDER BY)."""
         if livello == NESSUN_FILTRO:
             if not self.sbagliate:
-                yield Candidata(0, "", "", None, self.completo)
+                yield 0, "", ""
         elif livello in (UGUALE, PARTE, INTERVALLO, ELENCO):
             for regola in self.regole:
                 if regola.livello == livello and self.funziona(regola):
-                    yield Candidata(self.pesi[regola.colonna], regola.sql, "", None, self.completo)
+                    yield self.pesi[regola.colonna], regola.sql, ""
         elif livello in (DUE_UGUALI, DUE_REGOLE):
             coppie = ((a, b) for a, b in itertools.combinations(self.regole, 2)
                       if a.colonna != b.colonna and (a.livello == b.livello == UGUALE) == (livello == DUE_UGUALI))
             for a, b in itertools.islice(coppie, MAX_COPPIE):
                 if self.accettate(a) and self.accettate(b) and self.funziona(a, b):
-                    yield Candidata(self.pesi[a.colonna] + self.pesi[b.colonna], f"{a.sql} AND {b.sql}", "", None,
-                                    self.completo)
+                    yield self.pesi[a.colonna] + self.pesi[b.colonna], f"{a.sql} AND {b.sql}", ""
         elif livello == PRIMI_N and self.completo:
-            for peso, condizione, ordine in self._primi_n():
-                yield Candidata(peso, condizione, ordine, None, True)
-        elif livello == GRUPPI_CALCOLO and self.calcolate:
-            yield from self._gruppi_calcolo()
-        elif livello in (GRUPPI_SOGLIA, GRUPPI_PRIMI) and self.completo:
-            yield from self._gruppi_scelti(livello)
-
-    def _raggruppa(self, filtro):
-        """Le righe (passate dal filtro) divise per gruppo: chiave = valori delle colonne finali della chiave."""
-        chiave_cache = filtro.sql if filtro else ""
-        if chiave_cache not in self._gruppi:
-            gruppi = defaultdict(list)
-            for r in self.righe:
-                if filtro is None or filtro.funzione(r):
-                    gruppi[self.proietta(r)].append(r)
-            self._gruppi[chiave_cache] = gruppi
-        return self._gruppi[chiave_cache]
-
-    def _chiave_sql(self):
-        return ", ".join(self.colonne_sql[i] for i in self.proiezione)
-
-    def _gruppi_calcolo(self):
-        """GROUP BY: le colonne finali che non vengono dai dati sono un conteggio o una somma per gruppo.
-
-        La chiave del gruppo sono le altre colonne finali; il filtro sulle righe e' uno di quelli che
-        lasciano passare solo righe dei gruppi giusti (anche nessun filtro).
-        """
-        attese = {tuple(r[j] for j in self.posizioni): [r[j] for j in self.calcolate] for r in self.righe_finali}
-        if len(attese) != len(self.righe_finali):
-            return  # chiavi ripetute nella tabella finale: non e' un raggruppamento per quelle colonne
-        filtri = sorted((r for r in self.regole if r.livello in (UGUALE, PARTE, INTERVALLO) and self.funziona(r)),
-                        key=lambda r: self.pesi[r.colonna])[:MAX_FILTRI_PER_GRUPPI]
-        filtri = ([None] if not self.sbagliate else []) + filtri
-        for filtro in filtri:
-            if time.time() > self.scadenza:
-                return
-            gruppi = self._raggruppa(filtro)
-            if set(gruppi) != set(attese):
-                continue
-            scelte = []
-            for posto in range(len(self.calcolate)):
-                adatti = [(sql, i) for sql, funzione, i in self.aggregati
-                          if all(_uguali(funzione(gruppi[k]), valori[posto]) for k, valori in attese.items())]
-                if not adatti:
-                    break
-                scelte.append(adatti[:2])
-            else:
-                for combinazione in itertools.islice(itertools.product(*scelte), 4):
-                    calcoli = dict(zip(self.calcolate, combinazione))
-                    colonne = [calcoli[j][0] if j in calcoli else self.colonne_sql[self.proiezione[self.posizioni.index(j)]]
-                               for j in range(len(self.righe_finali[0]))]
-                    peso = (self.pesi[filtro.colonna] if filtro else 0) + sum(self.pesi[i] for _, i in combinazione if i >= 0)
-                    yield Candidata(peso, filtro.sql if filtro else "", f" GROUP BY {self._chiave_sql()}",
-                                    ", ".join(colonne), True)
-
-    def _gruppi_scelti(self, livello):
-        """HAVING o ORDER BY ... LIMIT su un conteggio o una somma per gruppo: le righe finali sono i gruppi
-        (le colonne finali sono la chiave) con il valore sopra o sotto una soglia, o i primi N in ordine."""
-        finali = set(self.attese)
-        if self.doppioni:
-            return
-        # Filtri sulle righe prima di raggruppare: anche quelli che lasciano passare altri gruppi
-        # (la stagione 2015/2016 vale per tutte le leghe, poi si sceglie tra i gruppi).
-        filtri = [None] + sorted((r for r in self.regole if r.livello in (UGUALE, PARTE)),
-                                 key=lambda r: self.pesi[r.colonna])[:MAX_FILTRI_PER_GRUPPI]
-        # Prima i calcoli piu' semplici su tutti i filtri (contare le righe), poi gli altri.
-        livelli_di_calcolo = [self.aggregati[:1], [a for a in self.aggregati[1:] if a[0].startswith("COUNT")],
-                              [a for a in self.aggregati if not a[0].startswith("COUNT")]]
-        for calcoli, filtro in ((c, f) for c in livelli_di_calcolo for f in filtri):
-            gruppi = self._raggruppa(filtro)
-            altri = [k for k in gruppi if k not in finali]
-            if not finali <= set(gruppi) or not altri:
-                continue  # serve una scelta tra gruppi: senza altri gruppi bastava il filtro
-            where = filtro.sql if filtro else ""
-            for sql, funzione, i in calcoli:
-                if time.time() > self.scadenza:
-                    return
-                valori = {k: funzione(rr) for k, rr in gruppi.items()}
-                if any(not _numero(v) for v in valori.values()):
-                    continue
-                peso = (self.pesi[filtro.colonna] if filtro else 0) + (self.pesi[i] if i >= 0 else 0)
-                dentro, fuori = [valori[k] for k in finali], [valori[k] for k in altri]
-                if livello == GRUPPI_SOGLIA:
-                    # La soglia viene dai dati: il valore piu' alto (o piu' basso) tra i gruppi esclusi.
-                    if max(fuori) < min(dentro):
-                        yield Candidata(peso, where, f" GROUP BY {self._chiave_sql()} HAVING {sql} > {letterale(max(fuori))}",
-                                        None, True)
-                    elif min(fuori) > max(dentro):
-                        yield Candidata(peso, where, f" GROUP BY {self._chiave_sql()} HAVING {sql} < {letterale(min(fuori))}",
-                                        None, True)
-                else:
-                    n = len(finali)
-                    for verso, inverti in (("DESC", True), ("ASC", False)):
-                        ordinati = sorted(gruppi, key=lambda k: valori[k], reverse=inverti)
-                        if len(ordinati) > n and valori[ordinati[n - 1]] == valori[ordinati[n]]:
-                            continue  # pari merito al confine: non e' una regola
-                        if set(ordinati[:n]) == finali:
-                            yield Candidata(peso, where, f" GROUP BY {self._chiave_sql()} ORDER BY {sql} {verso} LIMIT {n}",
-                                            None, True)
+            yield from self._primi_n()
 
     def _primi_n(self):
         """ORDER BY ... LIMIT N: le righe finali sono le prime N in ordine di una colonna (anche dopo un filtro)."""
@@ -439,28 +274,21 @@ class Contesto:
                         peso = self.pesi[filtro.colonna] if filtro else 0  # ordinare per una data o un numero e' normale
                         yield peso, condizione, f" ORDER BY {nome} {verso} LIMIT {n}"
 
-    def sql(self, condizione, coda, select=None):
-        distinct = "" if coda or (self.completo and self.doppioni) else "DISTINCT "
+    def sql(self, condizione, ordine):
+        distinct = "" if ordine or (self.completo and self.doppioni) else "DISTINCT "
         where = f" WHERE {condizione}" if condizione else ""
-        select = select or ", ".join(self.colonne_sql[i] for i in self.proiezione)
-        return f"SELECT {distinct}{select} FROM {self.base['from']}{where}{coda}"
+        select = ", ".join(self.colonne_sql[i] for i in self.proiezione)
+        return f"SELECT {distinct}{select} FROM {self.base['from']}{where}{ordine}"
 
 
-def contesti_possibili(conn, tabelle_di_partenza, righe_finali):
-    """(completi, parziali, per i GROUP BY). Un contesto parziale ha qualche colonna finale che non viene dai
-    dati: si cerca il filtro sulle altre; quelli "per i GROUP BY" provano a calcolarla per gruppo."""
-    contesti = list(_tutti_i_contesti(conn, tabelle_di_partenza, righe_finali))
+def contesti_possibili(conn, tabelle_di_partenza, righe_finali, solo_completi):
+    """Tutti i contesti utili. Se qualcuno e' completo, quelli parziali non servono: si tengono solo i completi."""
+    contesti = list(_tutti_i_contesti(conn, tabelle_di_partenza, righe_finali, solo_completi))
     completi = [c for c in contesti if c.completo]
-    parziali = [c for c in contesti if not c.completo and not c.solo_gruppi]
-    return completi, parziali, [c for c in contesti if c.calcolate]
+    return completi or contesti
 
 
-def _numerica(valori):
-    presenti = [v for v in valori if v is not None]
-    return bool(presenti) and all(_numero(v) for v in presenti)
-
-
-def _tutti_i_contesti(conn, tabelle_di_partenza, righe_finali):
+def _tutti_i_contesti(conn, tabelle_di_partenza, righe_finali, solo_completi):
     colonne_finali = list(zip(*righe_finali))
     for base in basi_possibili(conn, tabelle_di_partenza):
         righe = conn.execute(f"SELECT {', '.join(base['colonne'])} FROM {base['from']} LIMIT {MAX_RIGHE_BASE + 1}").fetchall()
@@ -474,27 +302,11 @@ def _tutti_i_contesti(conn, tabelle_di_partenza, righe_finali):
                             key=lambda i: len(valori_colonna[i]))  # prima le colonne piu' "specifiche"
             candidati.append(adatte[:MAX_CANDIDATI_PER_COLONNA])
         posizioni = [j for j, c in enumerate(candidati) if c]
-        # Per i GROUP BY la chiave sono le colonne finali che vengono dai dati e le altre si calcolano; ma un
-        # conteggio puo' per caso comparire in una colonna di partenza, quindi si prova anche a considerare
-        # calcolate tutte le colonne finali di numeri.
-        chiavi_per_gruppi = []
-        mancanti = [j for j in range(len(colonne_finali)) if j not in posizioni]
-        if mancanti and all(_numerica(colonne_finali[j]) for j in mancanti):
-            chiavi_per_gruppi.append(posizioni)
-        di_testo = [j for j in posizioni if not _numerica(colonne_finali[j])]
-        if di_testo and di_testo != posizioni and all(_numerica(colonne_finali[j]) for j in range(len(colonne_finali))
-                                                       if j not in di_testo):
-            chiavi_per_gruppi.append(di_testo)
-        for chiave in [posizioni] + [c for c in chiavi_per_gruppi if c != posizioni]:
-            if not chiave:
-                continue
-            for proiezione in itertools.islice(itertools.product(*(candidati[j] for j in chiave)), MAX_PROIEZIONI):
-                contesto = Contesto(base, righe, valori_colonna, chiave, proiezione, righe_finali)
-                if not contesto.utile:
-                    continue
-                contesto.solo_gruppi = chiave != posizioni
-                if chiave in chiavi_per_gruppi:
-                    contesto.calcolate = [j for j in range(len(colonne_finali)) if j not in chiave]
+        if not posizioni or (solo_completi and len(posizioni) < len(candidati)):
+            continue
+        for proiezione in itertools.islice(itertools.product(*(candidati[j] for j in posizioni)), MAX_PROIEZIONI):
+            contesto = Contesto(base, righe, valori_colonna, posizioni, proiezione, righe_finali)
+            if contesto.utile:
                 yield contesto
 
 
@@ -520,42 +332,36 @@ def cerca_filtri(conn, tabelle_di_partenza, tabella_finale, secondi_max=60, quan
     _, righe_finali = leggi_righe(conn, nome_sql(tabella_finale))
     if not righe_finali:
         return [], 0
-    completi, parziali, per_gruppi = contesti_possibili(conn, tabelle_di_partenza, righe_finali)
-    normali = completi or ([] if solo_complete else parziali)
-    for contesto in completi + parziali + per_gruppi:
-        contesto.scadenza = inizio + secondi_max
+    contesti = contesti_possibili(conn, tabelle_di_partenza, righe_finali, solo_complete)
     trovate, condizioni_viste, provate = [], set(), 0
     for livello in range(len(NOMI_DEI_LIVELLI)):
-        contesti = (per_gruppi if livello == GRUPPI_CALCOLO else
-                    completi if livello in (GRUPPI_SOGLIA, GRUPPI_PRIMI) else normali)
-        # Prima le candidate di tutti i contesti, poi la verifica dalla piu' credibile (peso piu' basso).
+        # Prima le condizioni di tutti i contesti, poi la verifica dalla piu' credibile (peso piu' basso).
         da_provare = []
         for n, contesto in enumerate(contesti):
-            for candidata in contesto.condizioni(livello):
-                da_provare.append((candidata.peso, n, candidata, contesto))
+            for peso, condizione, ordine in contesto.condizioni(livello):
+                da_provare.append((peso, n, condizione, ordine, contesto))
                 if time.time() - inizio > secondi_max:
                     return trovate, provate
         trovate_nel_livello = 0
-        for _, _, candidata, contesto in sorted(da_provare, key=lambda x: x[:2]):
+        for _, _, condizione, ordine, contesto in sorted(da_provare, key=lambda x: x[:2]):
             if time.time() - inizio > secondi_max:
                 return trovate, provate
             if per_livello and trovate_nel_livello >= per_livello:
                 break
             # La stessa condizione su un'altra unione di tabelle non e' una regola diversa.
-            firma = (candidata.condizione, candidata.coda, candidata.select)
-            if firma in condizioni_viste:
+            if (condizione, ordine) in condizioni_viste:
                 continue
-            sql = contesto.sql(candidata.condizione, candidata.coda, candidata.select)
+            sql = contesto.sql(condizione, ordine)
             provate += 1
-            if candidata.completa:
+            if contesto.completo:
                 esito = verifica(conn, tabella_finale, sql)
                 valida = esito["corretto"] and not esito["copiatura_sospetta"]
             else:
                 esito, valida = None, _verifica_parziale(conn, contesto, sql)
             if valida:
-                condizioni_viste.add(firma)
+                condizioni_viste.add((condizione, ordine))
                 trovate_nel_livello += 1
-                trovate.append({"sql": sql, "livello": NOMI_DEI_LIVELLI[livello], "completa": candidata.completa,
+                trovate.append({"sql": sql, "livello": NOMI_DEI_LIVELLI[livello], "completa": contesto.completo,
                                 "esito": esito})
                 if len(trovate) >= quanti:
                     return trovate, provate

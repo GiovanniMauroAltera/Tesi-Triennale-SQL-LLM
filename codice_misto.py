@@ -26,7 +26,7 @@ from prompt import messaggi_iniziali
 from verifica import apri_database, leggi_info_caso
 
 SECONDI_RICERCA = 60
-MAX_SUGGERIMENTI = 22           # 2 per ogni tipo di regola: anche quelle sui gruppi, che vengono per ultime
+MAX_SUGGERIMENTI = 12
 SUGGERIMENTI_PER_LIVELLO = 2   # regole di tipo diverso, non dieci varianti della stessa
 
 
