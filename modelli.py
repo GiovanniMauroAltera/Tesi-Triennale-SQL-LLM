@@ -40,9 +40,12 @@ MODELLI = {
     "qwen3.5-4b": {"fornitore": "ollama", "nome": "qwen3.5:4b", "pensa": False, "di_base": False},
     "qwen3.5-9b": {"fornitore": "ollama", "nome": "qwen3.5:9b", "pensa": False},
 }
-# I modelli interrogati quando non se ne sceglie nessuno con --modelli.
-MODELLI_DI_BASE = [nome for nome, config in MODELLI.items() if config.get("di_base", True)]
 
+# I modelli interrogati quando non se ne sceglie nessuno con --modelli.
+MODELLI_DI_BASE = []
+for nome, configurazione in MODELLI.items():
+    if configurazione.get("di_base", True):
+        MODELLI_DI_BASE.append(nome)
 
 MAX_ATTESE_LIMITE_AL_MINUTO = 6
 
@@ -51,12 +54,14 @@ class ModelloNonDisponibile(Exception):
     """Quota giornaliera finita o chiave mancante: inutile riprovare oggi."""
 
 
-def _attesa_suggerita(messaggio):
+def attesa_suggerita(messaggio):
     """Secondi da aspettare indicati nel messaggio d'errore (es. Groq: 'Please try again in 1m2.5s')."""
     trovato = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", messaggio)
     if not trovato:
         return None
-    return int(trovato.group(1) or 0) * 60 + float(trovato.group(2))
+    minuti = int(trovato.group(1) or 0)
+    secondi = float(trovato.group(2))
+    return minuti * 60 + secondi
 
 
 def leggi_chiave(variabile):
@@ -74,53 +79,66 @@ def leggi_chiave(variabile):
     return chiave
 
 
-def _contesto_necessario(messaggi, max_token):
+def contesto_necessario(messaggi, max_token):
     """Il contesto piu' piccolo che basta: con meno contesto il modello sta tutto nella scheda video ed e' piu' veloce.
 
     Stima prudente di 2 caratteri per token (il prompt piu' lungo dei casi BIRD: 8499 caratteri = 4242 token).
+    Il risultato e' arrotondato a un multiplo di 1024.
     """
-    token_prompt = sum(len(m["content"]) for m in messaggi) / 2
-    return max(CONTESTO_MINIMO_LOCALI, math.ceil((token_prompt + max_token + 256) / 1024) * 1024)
+    caratteri = 0
+    for messaggio in messaggi:
+        caratteri += len(messaggio["content"])
+    token_prompt = caratteri / 2
+    contesto = math.ceil((token_prompt + max_token + 256) / 1024) * 1024
+    return max(CONTESTO_MINIMO_LOCALI, contesto)
 
 
-def _chiama_ollama(config, messaggi):
-    max_token = config.get("max_token", MAX_TOKEN_LOCALI)
-    richiesta = {"model": config["nome"], "messages": messaggi, "stream": False,
-                 "options": {"temperature": 0, "num_ctx": _contesto_necessario(messaggi, max_token),
+def chiama_ollama(configurazione, messaggi):
+    """Un modello sul computer, con Ollama."""
+    max_token = configurazione.get("max_token", MAX_TOKEN_LOCALI)
+    richiesta = {"model": configurazione["nome"], "messages": messaggi, "stream": False,
+                 "options": {"temperature": 0, "num_ctx": contesto_necessario(messaggi, max_token),
                              "num_predict": max_token}}
-    if "pensa" in config:
-        richiesta["think"] = config["pensa"]  # il ragionamento torna a parte, non nel testo della risposta
+    if "pensa" in configurazione:
+        richiesta["think"] = configurazione["pensa"]  # il ragionamento torna a parte, non nel testo della risposta
     risposta = httpx.post(OLLAMA, timeout=FORNITORI["ollama"][2], json=richiesta)
     risposta.raise_for_status()
     dati = risposta.json()
-    return dati["message"]["content"], dati.get("done_reason") == "length"
+    tagliata = dati.get("done_reason") == "length"
+    return dati["message"]["content"], tagliata
 
 
 def chiama(modello, messaggi):
     """Manda la conversazione al modello e restituisce (testo della risposta, True se e' stata tagliata)."""
-    config = MODELLI[modello]
-    if config["fornitore"] == "ollama":
-        return _chiama_ollama(config, messaggi)
+    configurazione = MODELLI[modello]
+    if configurazione["fornitore"] == "ollama":
+        return chiama_ollama(configurazione, messaggi)
 
-    indirizzo, variabile, secondi = FORNITORI[config["fornitore"]]
+    indirizzo, variabile, secondi = FORNITORI[configurazione["fornitore"]]
     client = OpenAI(base_url=indirizzo, api_key=leggi_chiave(variabile), timeout=secondi, max_retries=0)
+    risposta = None
     for _ in range(MAX_ATTESE_LIMITE_AL_MINUTO):
         try:
-            risposta = client.chat.completions.create(model=config["nome"], messages=messaggi, temperature=0.0,
-                                                      **config.get("parametri", {}))
+            risposta = client.chat.completions.create(model=configurazione["nome"], messages=messaggi,
+                                                      temperature=0.0)
             break
         except Exception as errore:
             testo = str(errore)
+            # 429 = troppe richieste. Se e' il limite del giorno non serve aspettare.
             if "429" in testo and ("per day" in testo.lower() or "per-day" in testo.lower()):
                 raise ModelloNonDisponibile(f"quota giornaliera gratuita finita: {errore}")
-            attesa = _attesa_suggerita(testo)
+            attesa = attesa_suggerita(testo)
             if "429" not in testo or attesa is None or attesa > 120:
                 raise
             time.sleep(attesa + 1)  # limite al minuto: il fornitore dice quanto aspettare
-    else:
+    if risposta is None:
         raise RuntimeError("limite di richieste al minuto: troppe attese di fila")
     if not risposta.choices:
         # OpenRouter a volte risponde "200 OK" ma con l'errore del fornitore al posto della risposta.
-        raise RuntimeError(f"risposta vuota dal fornitore: {(risposta.model_extra or {}).get('error')}")
+        errore = None
+        if risposta.model_extra:
+            errore = risposta.model_extra.get("error")
+        raise RuntimeError(f"risposta vuota dal fornitore: {errore}")
     scelta = risposta.choices[0]
-    return scelta.message.content or "", scelta.finish_reason == "length"
+    tagliata = scelta.finish_reason == "length"
+    return scelta.message.content or "", tagliata

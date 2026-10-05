@@ -19,7 +19,7 @@ import argparse
 import sys
 import time
 
-from codice_principale import CORREZIONI, _accettabile, _descrivi, ricostruisci
+from codice_principale import CORREZIONI, accettabile, descrivi, ricostruisci
 from codice_ricerca_noLLM import cerca_filtri
 from modelli import MODELLI, MODELLI_DI_BASE
 from prompt import messaggi_iniziali
@@ -31,14 +31,17 @@ SUGGERIMENTI_PER_LIVELLO = 2   # regole di tipo diverso, non dieci varianti dell
 
 
 def descrivi_suggerimenti(trovate):
+    """Il testo da aggiungere al prompt con le query trovate dal programma."""
     if not trovate:
         return ("Il programma non ha trovato nessun filtro semplice che selezioni le righe dello STATO B: probabilmente "
                 "servono calcoli (conteggi, somme, medie, conversioni) o condizioni piu' complicate.")
     righe = []
-    for n, trovata in enumerate(trovate, 1):
-        nota = ("riproduce gia' lo STATO B" if trovata["completa"]
-                else "seleziona le righe giuste, ma le colonne calcolate vanno ancora aggiunte")
-        righe.append(f"{n}. {trovata['sql']}\n   -- regola: {trovata['livello']}; {nota}")
+    for numero, trovata in enumerate(trovate, start=1):
+        if trovata["completa"]:
+            nota = "riproduce gia' lo STATO B"
+        else:
+            nota = "seleziona le righe giuste, ma le colonne calcolate vanno ancora aggiunte"
+        righe.append(f"{numero}. {trovata['sql']}\n   -- regola: {trovata['livello']}; {nota}")
     return ("Un programma ha provato in automatico molti filtri sulle tabelle di partenza. Queste query selezionano "
             "esattamente le righe da cui nasce lo STATO B:\n" + "\n".join(righe) + "\n"
             "Attenzione: alcune funzionano solo per coincidenza (per esempio un identificativo o un intervallo di numeri "
@@ -60,11 +63,14 @@ def ricostruisci_misto(conn, tabelle_di_partenza, tabella_finale, modelli, secon
     messaggi = messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale, descrivi_suggerimenti(trovate))
     rimasti = max(1, secondi_max - (time.time() - inizio))
     migliore, proposte = ricostruisci(conn, tabelle_di_partenza, tabella_finale, modelli, rimasti, correzioni, messaggi)
-    complete = [t for t in trovate if t["completa"]]
-    if complete and (migliore is None or not _accettabile(migliore["esito"])):
-        # Il modello non ce l'ha fatta: resta la prima query del programma, che riproduce la tabella finale.
-        migliore = {"modello": "programma", "sql": complete[0]["sql"], "esito": complete[0]["esito"], "tentativo": 0}
-        proposte.append(migliore)
+
+    # Il modello non ce l'ha fatta: resta la prima query del programma che riproduce la tabella finale.
+    if migliore is None or not accettabile(migliore["esito"]):
+        for trovata in trovate:
+            if trovata["completa"]:
+                migliore = {"modello": "programma", "sql": trovata["sql"], "esito": trovata["esito"], "tentativo": 0}
+                proposte.append(migliore)
+                break
     return migliore, proposte, trovate
 
 
@@ -96,12 +102,14 @@ def main():
     if migliore is None:
         print("Nessuna query: il programma non ha trovato regole e nessun modello ha risposto.")
         sys.exit(1)
-    verificata = _accettabile(migliore["esito"])
-    print(("QUERY TROVATA" if verificata else "NESSUNA QUERY VERIFICATA, la migliore e'")
-          + f" ({migliore['modello']}, {secondi:.0f} s):\n\n{migliore['sql']}")
-    if not verificata:
-        print(f"\nAttenzione: {_descrivi(migliore['esito'])}")
-    sys.exit(0 if verificata else 1)
+    verificata = accettabile(migliore["esito"])
+    if verificata:
+        print(f"QUERY TROVATA ({migliore['modello']}, {secondi:.0f} s):\n\n{migliore['sql']}")
+    else:
+        print(f"NESSUNA QUERY VERIFICATA, la migliore e' ({migliore['modello']}, {secondi:.0f} s):\n\n{migliore['sql']}")
+        print(f"\nAttenzione: {descrivi(migliore['esito'])}")
+        sys.exit(1)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

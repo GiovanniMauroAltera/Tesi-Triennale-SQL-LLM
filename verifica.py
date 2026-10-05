@@ -2,17 +2,17 @@
 import re
 import sqlite3
 import time
-from collections import Counter
 
 TOLLERANZA = 0.01             # differenza relativa ammessa sui numeri (i modelli arrotondano in modo diverso)
 SECONDI_MAX_QUERY = 30        # oltre, la query viene fermata (di solito e' un prodotto cartesiano)
 MAX_RIGHE_LETTE = 5000        # un risultato piu' grande non serve leggerlo tutto: e' sbagliato di sicuro
 TABELLA_RISULTATO = "_risultato_del_modello"
-TABELLE_DI_SERVIZIO = ("_caso_info", "_bird_info")  # metadati dei file dei casi, mai visibili al modello
+TABELLE_DI_SERVIZIO = ["_caso_info", "_bird_info"]  # metadati dei file dei casi, mai visibili al modello
 
 
 def nome_sql(nome):
-    # I nomi delle tabelle e delle colonne possono contenere spazi o parentesi (es. "First Date").
+    # I nomi delle tabelle e delle colonne possono contenere spazi o parentesi (es. "First Date"):
+    # tra virgolette SQLite li accetta sempre.
     return '"' + nome.replace('"', '""') + '"'
 
 
@@ -28,16 +28,39 @@ def apri_database(percorso):
 def leggi_info_caso(conn):
     """Nei file dei casi (BIRD e caso dei PC) i nomi delle tabelle sono scritti nella tabella _caso_info."""
     partenza, finale = conn.execute("SELECT tabelle_sorgente, tabella_target FROM _caso_info").fetchone()
-    return [nome.strip() for nome in partenza.split(",")], finale
+    tabelle_di_partenza = []
+    for nome in partenza.split(","):
+        tabelle_di_partenza.append(nome.strip())
+    return tabelle_di_partenza, finale
 
 
 def leggi_righe(conn, tabella, limite=None):
-    cursore = conn.execute(f"SELECT * FROM {tabella}" + (f" LIMIT {limite}" if limite else ""))
-    return [colonna[0] for colonna in cursore.description], cursore.fetchall()
+    """(nomi delle colonne, righe) di una tabella, al massimo `limite` righe se indicato."""
+    sql = f"SELECT * FROM {tabella}"
+    if limite:
+        sql += f" LIMIT {limite}"
+    cursore = conn.execute(sql)
+    colonne = []
+    for descrizione in cursore.description:
+        colonne.append(descrizione[0])
+    return colonne, cursore.fetchall()
 
 
 def colonne_di(conn, tabella):
-    return [info[1] for info in conn.execute(f"PRAGMA table_info({nome_sql(tabella)})")]
+    """I nomi delle colonne di una tabella."""
+    colonne = []
+    for informazioni in conn.execute(f"PRAGMA table_info({nome_sql(tabella)})"):
+        colonne.append(informazioni[1])  # ogni riga di PRAGMA table_info e' (posizione, nome, tipo, ...)
+    return colonne
+
+
+def valori_diversi(conn, tabella, colonna):
+    """I valori diversi (non vuoti) di una colonna."""
+    valori = set()
+    for riga in conn.execute(f"SELECT DISTINCT {nome_sql(colonna)} FROM {nome_sql(tabella)} "
+                             f"WHERE {nome_sql(colonna)} IS NOT NULL"):
+        valori.add(riga[0])
+    return valori
 
 
 def chiavi_di_collegamento(conn, tabella_a, tabella_b, min_diversi=5, min_sovrapposizione=0.8):
@@ -45,23 +68,27 @@ def chiavi_di_collegamento(conn, tabella_a, tabella_b, min_diversi=5, min_sovrap
 
     Una colonna di a si collega a una di b se quasi tutti i suoi valori compaiono anche in b
     (es. member.zip in zip_code.zip_code). Si ignorano le colonne con pochi valori diversi
-    (es. 'Yes'/'No'), che si sovrappongono per caso.
+    (es. 'Yes'/'No'), che si sovrappongono per caso. Prima le coppie che si sovrappongono di piu'.
     """
-    def distinti(tabella, colonna):
-        return {r[0] for r in conn.execute(f"SELECT DISTINCT {nome_sql(colonna)} FROM {nome_sql(tabella)} "
-                                           f"WHERE {nome_sql(colonna)} IS NOT NULL")}
-    valori_b = {c: distinti(tabella_b, c) for c in colonne_di(conn, tabella_b)}
+    valori_b = {}
+    for colonna_b in colonne_di(conn, tabella_b):
+        valori_b[colonna_b] = valori_diversi(conn, tabella_b, colonna_b)
     coppie = []
     for colonna_a in colonne_di(conn, tabella_a):
-        valori_a = distinti(tabella_a, colonna_a)
+        valori_a = valori_diversi(conn, tabella_a, colonna_a)
         if len(valori_a) < min_diversi:
             continue
-        for colonna_b, vb in valori_b.items():
-            if len(vb) >= min_diversi:
-                sovrapposizione = len(valori_a & vb) / len(valori_a)
-                if sovrapposizione >= min_sovrapposizione:
-                    coppie.append((sovrapposizione, colonna_a, colonna_b))
-    return [(a, b) for _, a, b in sorted(coppie, reverse=True)]
+        for colonna_b, valori in valori_b.items():
+            if len(valori) < min_diversi:
+                continue
+            sovrapposizione = len(valori_a & valori) / len(valori_a)
+            if sovrapposizione >= min_sovrapposizione:
+                coppie.append((sovrapposizione, colonna_a, colonna_b))
+    coppie.sort(reverse=True)
+    risultato = []
+    for sovrapposizione, colonna_a, colonna_b in coppie:
+        risultato.append((colonna_a, colonna_b))
+    return risultato
 
 
 def copia_per_il_modello(conn, tabella_finale):
@@ -71,25 +98,28 @@ def copia_per_il_modello(conn, tabella_finale):
     """
     copia = sqlite3.connect(":memory:")
     conn.backup(copia)
-    for tabella in (tabella_finale, *TABELLE_DI_SERVIZIO):
+    for tabella in [tabella_finale] + TABELLE_DI_SERVIZIO:
         copia.execute(f"DROP TABLE IF EXISTS {nome_sql(tabella)}")
     return copia
 
 
-def _senza_commenti(sql):
+def senza_commenti(sql):
+    """Il codice SQL senza i commenti (-- fino a fine riga, e /* ... */)."""
     return re.sub(r"--[^\n]*|/\*.*?\*/", "", sql, flags=re.DOTALL).strip()
 
 
 def dividi_istruzioni(sql):
     """Divide il codice in istruzioni, senza farsi ingannare dai ';' dentro le stringhe."""
-    istruzioni, corrente = [], ""
+    istruzioni = []
+    corrente = ""
     for pezzo in sql.split(";"):
         corrente += pezzo + ";"
+        # complete_statement dice se fin qui c'e' un'istruzione intera (un ';' in una stringa non la chiude).
         if sqlite3.complete_statement(corrente):
-            if _senza_commenti(corrente).strip(";").strip():
+            if senza_commenti(corrente).strip(";").strip():
                 istruzioni.append(corrente.strip())
             corrente = ""
-    if _senza_commenti(corrente).strip(";").strip():
+    if senza_commenti(corrente).strip(";").strip():
         istruzioni.append(corrente.strip())
     return istruzioni
 
@@ -106,20 +136,28 @@ def esegui(conn, sql):
         raise ValueError("la risposta non contiene codice SQL")
 
     inizio = time.time()
-    conn.set_progress_handler(lambda: time.time() - inizio > SECONDI_MAX_QUERY, 100_000)
+
+    def troppo_tempo():
+        # SQLite chiama questa funzione ogni tanto mentre lavora: se restituisce True, la query si ferma.
+        return time.time() - inizio > SECONDI_MAX_QUERY
+
+    conn.set_progress_handler(troppo_tempo, 100_000)
     try:
-        ultima = _senza_commenti(istruzioni[-1]).rstrip(";").strip()
+        ultima = senza_commenti(istruzioni[-1]).rstrip(";").strip()
         if re.match(r"(SELECT|WITH)\b", ultima, flags=re.IGNORECASE):
+            # Le istruzioni prima dell'ultima (tabelle temporanee), poi il risultato in una tabella da leggere.
             if len(istruzioni) > 1:
                 conn.executescript("\n".join(istruzioni[:-1]))
             conn.execute(f"CREATE TEMP TABLE {TABELLA_RISULTATO} AS {ultima}")
             tabella = TABELLA_RISULTATO
         else:
             conn.executescript("\n".join(istruzioni))
-            create = [riga[0] for riga in conn.execute("SELECT name FROM sqlite_temp_master WHERE type = 'table'")]
-            if not create:
+            temporanee = []
+            for riga in conn.execute("SELECT name FROM sqlite_temp_master WHERE type = 'table'"):
+                temporanee.append(riga[0])
+            if not temporanee:
                 raise ValueError("la query non restituisce nessun risultato: l'ultima istruzione deve essere una SELECT")
-            tabella = nome_sql(create[-1])
+            tabella = nome_sql(temporanee[-1])
         totale = conn.execute(f"SELECT COUNT(*) FROM {tabella}").fetchone()[0]
         colonne, righe = leggi_righe(conn, tabella, MAX_RIGHE_LETTE)
     except sqlite3.Error as errore:
@@ -131,15 +169,20 @@ def esegui(conn, sql):
     return colonne, righe, totale
 
 
-def _valori_uguali(atteso, ottenuto):
-    numeri = (int, float)
-    if isinstance(atteso, numeri) and isinstance(ottenuto, numeri):
+def valori_uguali(atteso, ottenuto):
+    """Due valori sono uguali; se sono numeri basta che siano vicini (tolleranza dell'1%)."""
+    if isinstance(atteso, (int, float)) and isinstance(ottenuto, (int, float)):
         return abs(atteso - ottenuto) <= max(1e-6, TOLLERANZA * abs(atteso))
     return atteso == ottenuto
 
 
-def _righe_uguali(attesa, ottenuta):
-    return len(attesa) == len(ottenuta) and all(_valori_uguali(a, o) for a, o in zip(attesa, ottenuta))
+def righe_uguali(attesa, ottenuta):
+    if len(attesa) != len(ottenuta):
+        return False
+    for atteso, ottenuto in zip(attesa, ottenuta):
+        if not valori_uguali(atteso, ottenuto):
+            return False
+    return True
 
 
 def confronta(righe_ottenute, righe_attese, totale_ottenute=None):
@@ -148,27 +191,51 @@ def confronta(righe_ottenute, righe_attese, totale_ottenute=None):
     Prima abbina le righe identiche (veloce anche con molte righe), poi cerca tra quelle
     rimaste le corrispondenze con tolleranza sui numeri.
     """
-    totale_ottenute = len(righe_ottenute) if totale_ottenute is None else totale_ottenute
-    disponibili = Counter(righe_ottenute)
+    if totale_ottenute is None:
+        totale_ottenute = len(righe_ottenute)
+
+    # Quante volte compare ogni riga ottenuta: ogni riga attesa ne "consuma" una uguale.
+    disponibili = {}
+    for riga in righe_ottenute:
+        disponibili[riga] = disponibili.get(riga, 0) + 1
     mancanti = []
     for riga in righe_attese:
-        if disponibili[riga] > 0:
+        if disponibili.get(riga, 0) > 0:
             disponibili[riga] -= 1
         else:
             mancanti.append(riga)
-    rimaste = list(disponibili.elements())
+    rimaste = []  # le righe ottenute non ancora abbinate
+    for riga, quante in disponibili.items():
+        for _ in range(quante):
+            rimaste.append(riga)
+
+    # Per le righe attese che mancano, una riga rimasta uguale a meno della tolleranza sui numeri.
     ancora_mancanti = []
     for riga in mancanti:
-        trovata = next((i for i, altra in enumerate(rimaste) if _righe_uguali(riga, altra)), None)
+        trovata = None
+        for i, altra in enumerate(rimaste):
+            if righe_uguali(riga, altra):
+                trovata = i
+                break
         if trovata is None:
             ancora_mancanti.append(riga)
         else:
             rimaste.pop(trovata)
 
+    # Correttezza parziale: la media armonica (F1) tra precisione e richiamo.
     giuste = len(righe_attese) - len(ancora_mancanti)
-    precisione = giuste / totale_ottenute if totale_ottenute else float(not righe_attese)
-    richiamo = giuste / len(righe_attese) if righe_attese else float(not totale_ottenute)
-    parziale = 2 * precisione * richiamo / (precisione + richiamo) if precisione + richiamo else 0.0
+    if totale_ottenute:
+        precisione = giuste / totale_ottenute
+    else:
+        precisione = float(not righe_attese)
+    if righe_attese:
+        richiamo = giuste / len(righe_attese)
+    else:
+        richiamo = float(not totale_ottenute)
+    if precisione + richiamo:
+        parziale = 2 * precisione * richiamo / (precisione + richiamo)
+    else:
+        parziale = 0.0
     return {
         "corretto": not ancora_mancanti and totale_ottenute == len(righe_attese),
         "righe_attese": len(righe_attese),
@@ -193,8 +260,15 @@ def valori_copiati(sql, righe_finali):
     compaiono almeno meta' dei testi della tabella finale (e almeno due): vuol dire che il
     modello li ha ricopiati invece di ricavarli dalle tabelle di partenza.
     """
-    scritti_a_mano = {testo.replace("''", "'") for testo in re.findall(r"'((?:[^']|'')*)'", _senza_commenti(sql))}
-    testi_finali = {v for riga in righe_finali for v in riga if isinstance(v, str) and len(v.strip()) >= 2}
+    # I testi tra apici scritti nella query (un apice dentro un testo si scrive '').
+    scritti_a_mano = set()
+    for testo in re.findall(r"'((?:[^']|'')*)'", senza_commenti(sql)):
+        scritti_a_mano.add(testo.replace("''", "'"))
+    testi_finali = set()
+    for riga in righe_finali:
+        for valore in riga:
+            if isinstance(valore, str) and len(valore.strip()) >= 2:
+                testi_finali.add(valore)
     copiati = sorted(testi_finali & scritti_a_mano)
     sospetto = len(testi_finali) >= 2 and len(copiati) >= max(2, len(testi_finali) / 2)
     return sospetto, copiati
@@ -212,5 +286,7 @@ def verifica(conn, tabella_finale, sql):
         esito["righe_attese"] = len(righe_finali)
     finally:
         copia.close()
-    esito["copiatura_sospetta"], esito["valori_copiati"] = valori_copiati(sql, righe_finali)
+    sospetto, copiati = valori_copiati(sql, righe_finali)
+    esito["copiatura_sospetta"] = sospetto
+    esito["valori_copiati"] = copiati
     return esito
