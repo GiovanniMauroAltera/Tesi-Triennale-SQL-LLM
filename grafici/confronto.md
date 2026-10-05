@@ -47,12 +47,16 @@ Tabelle generate da `versione_ottimizzata/codice_confronto.py` a partire da `gra
 |---|---|---|---|---|---|
 | Gemma 4 31B | simple | 15 | 40,0% | 20,0% | 136 s |
 | Qwen3 4B | simple | 15 | 40,0% | 26,7% | 64 s |
+| Qwen3.5 4B | simple | 15 | 40,0% | 20,0% | 66 s |
 | Qwen3.5 9B | simple | 15 | 40,0% | 20,0% | 80 s |
 | Gemma 4 31B | moderate | 30 | 23,3% | 20,0% | 176 s |
 | Qwen3 4B | moderate | 60 | 23,3% | 8,3% | 25 s |
+| Qwen3.5 4B | moderate | 60 | 21,7% | 13,3% | 37 s |
 | Qwen3.5 9B | moderate | 60 | 23,3% | 15,0% | 54 s |
 | Qwen3 4B | challenging | 15 | 20,0% | 6,7% | 31 s |
+| Qwen3.5 4B | challenging | 15 | 26,7% | 13,3% | 61 s |
 | Qwen3.5 9B | challenging | 15 | 26,7% | 13,3% | 56 s |
 | Gemma 4 31B | tutte | 45 | 28,9% | 20,0% | 171 s |
 | Qwen3 4B | tutte | 90 | 25,6% | 11,1% | 34 s |
+| Qwen3.5 4B | tutte | 90 | 25,6% | 14,4% | 47 s |
 | Qwen3.5 9B | tutte | 90 | 26,7% | 15,6% | 57 s |

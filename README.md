@@ -145,7 +145,7 @@ Nella versione originale Llama aveva lo 0,7% di prove oneste in 141 secondi e Qw
 
 ## La prova sui 90 casi nuovi
 
-Sui 90 casi nuovi ho misurato la versione ottimizzata con Qwen3 4B e Qwen3.5 9B su tutti i 90 casi, e con Gemma sui primi 45 (i 15 "simple" e 30 "moderate"), sempre per i limiti giornalieri del servizio gratuito.
+Sui 90 casi nuovi ho misurato la versione ottimizzata con i tre modelli Qwen più nuovi (Qwen3 4B, Qwen3.5 4B e Qwen3.5 9B) su tutti i 90 casi, e con Gemma sui primi 45 (i 15 "simple" e 30 "moderate"), sempre per i limiti giornalieri del servizio gratuito.
 
 ![La versione ottimizzata sui 90 casi nuovi](grafici/fig_casi_nuovi.png)
 
@@ -153,9 +153,10 @@ Sui 90 casi nuovi ho misurato la versione ottimizzata con Qwen3 4B e Qwen3.5 9B 
 |---|---|---|---|---|
 | Gemma 4 31B (Google) | 45 | 28,9% | 20,0% | 171 s |
 | Qwen3 4B (locale) | 90 | 25,6% | 11,1% | 34 s |
+| Qwen3.5 4B (locale) | 90 | 25,6% | 14,4% | 47 s |
 | Qwen3.5 9B (locale) | 90 | 26,7% | 15,6% | 57 s |
 
-I risultati sono molto più bassi che sui 30 casi originali, anche sui casi "simple" (40%). I casi nuovi sono più difficili: la metà (45 su 90) richiede raggruppamenti, sottoquery, condizioni con OR o calcoli come conteggi e somme, che il programma non sa cercare, mentre tra i 30 casi originali ce n'è uno solo. E i 30 casi originali erano favorevoli al metodo, perché l'ho costruito guardando proprio quelli. Qui quasi tutte le query oneste le scrivono i modelli stessi (53 su 60), quindi il loro contributo resta importante. Mettendo insieme i tre modelli, i casi risolti in modo onesto almeno una volta sono 26 su 90.
+I risultati sono molto più bassi che sui 30 casi originali, anche sui casi "simple" (40%). I casi nuovi sono più difficili: la metà (45 su 90) richiede raggruppamenti, sottoquery, condizioni con OR o calcoli come conteggi e somme, che il programma non sa cercare, mentre tra i 30 casi originali ce n'è uno solo. E i 30 casi originali erano favorevoli al metodo, perché l'ho costruito guardando proprio quelli. Qui la maggior parte delle query oneste la scrivono i modelli stessi (69 su 83), quindi il loro contributo resta importante. I quattro modelli vanno quasi allo stesso modo e, mettendoli insieme, i casi risolti in modo onesto almeno una volta sono 26 su 90.
 
 La versione originale non l'ho fatta girare sui casi nuovi, quindi su questi casi non c'è un confronto diretto tra le due versioni.
 
@@ -253,7 +254,7 @@ Tutti i comandi si lanciano dalla cartella principale della repository.
     ```bash
     python versione_ottimizzata/codice_benchmark_ottimizzato.py --modelli gpt-oss-120b --prove 3
     python versione_ottimizzata/codice_benchmark_ottimizzato.py --modelli qwen3-4b qwen3.5-9b --prove 4
-    python versione_ottimizzata/codice_benchmark_ottimizzato.py --modelli qwen3-4b qwen3.5-9b --casi nuovi
+    python versione_ottimizzata/codice_benchmark_ottimizzato.py --modelli qwen3-4b qwen3.5-4b qwen3.5-9b --casi nuovi
     ```
     Anche questo script riparte da dove era rimasto e, se un servizio gratuito ha finito la quota del giorno, si ferma con quel modello: basta rilanciarlo il giorno dopo.
 7. Il confronto tra le due versioni:

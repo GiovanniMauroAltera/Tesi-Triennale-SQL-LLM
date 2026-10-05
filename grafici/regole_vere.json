@@ -10,7 +10,8 @@
  },
  "1042_european_football_2": {
   "SELECT DISTINCT t0.\"name\" \nFROM \"League\" AS t0 \nJOIN \"Match\" AS t1 ON t0.\"id\" = t1.\"league_id\"\nWHERE t1.\"season\" IS NOT NULL \n  AND t1.\"stage\" IS NOT NULL;": null,
-  "SELECT DISTINCT t0.\"name\" FROM \"League\" AS t0 JOIN \"Match\" AS t1 ON t0.\"id\" = t1.\"league_id\" WHERE t1.\"home_player_Y2\" >= 0": null
+  "SELECT DISTINCT t0.\"name\" FROM \"League\" AS t0 JOIN \"Match\" AS t1 ON t0.\"id\" = t1.\"league_id\" WHERE t1.\"home_player_Y2\" >= 0": null,
+  "SELECT DISTINCT t0.\"name\" FROM \"League\" AS t0 JOIN \"Match\" AS t1 ON t0.\"id\" = t1.\"league_id\" WHERE t1.\"home_player_Y2\" IN (0, 3) AND t1.\"home_player_Y3\" IN (3, 5);": null
  },
  "1044_european_football_2": {
   "SELECT DISTINCT\n  player_name\nFROM Player\nWHERE\n  STRFTIME('%Y-%m', birthday) = '1970-10';": true,
@@ -21,11 +22,13 @@
   "SELECT DISTINCT t0.\"player_name\" FROM \"Player\" AS t0 WHERE STRFTIME('%Y-%m', t0.\"birthday\") = '1970-10'": true
  },
  "1124_european_football_2": {
+  "SELECT DISTINCT t1.\"player_name\"\nFROM \"Player_Attributes\" AS t0\nJOIN \"Player\" AS t1 ON t0.\"player_api_id\" = t1.\"player_api_id\"\nWHERE t0.\"attacking_work_rate\" = 'high';": false,
   "SELECT DISTINCT t1.\"player_name\" \nFROM \"Player_Attributes\" AS t0 \nJOIN \"Player\" AS t1 ON t0.\"player_api_id\" = t1.\"player_api_id\" \nWHERE t0.\"attacking_work_rate\" = 'high';": false,
   "SELECT DISTINCT t1.\"player_name\" FROM \"Player_Attributes\" AS t0 JOIN \"Player\" AS t1 ON t0.\"player_api_id\" = t1.\"player_api_id\" WHERE t0.\"attacking_work_rate\" = 'high'": false
  },
  "1130_european_football_2": {
   "SELECT DISTINCT\n  t0.team_short_name\nFROM Team AS t0\nJOIN Team_Attributes AS t1\n  ON t0.team_fifa_api_id = t1.team_fifa_api_id\nWHERE\n  t1.chanceCreationPassingClass = 'Safe';": false,
+  "SELECT DISTINCT t0.\"team_short_name\"\nFROM \"Team\" AS t0\nJOIN \"Team_Attributes\" AS t1 ON t0.\"team_fifa_api_id\" = t1.\"team_fifa_api_id\"\nWHERE t1.\"chanceCreationPassingClass\" = 'Safe';": false,
   "SELECT DISTINCT t0.\"team_short_name\" \nFROM \"Team\" AS t0 \nJOIN \"Team_Attributes\" AS t1 ON t0.\"team_fifa_api_id\" = t1.\"team_fifa_api_id\" \nWHERE t1.\"chanceCreationPassingClass\" = 'Safe';": false,
   "SELECT DISTINCT t0.\"team_short_name\" FROM \"Team\" AS t0 JOIN \"Team_Attributes\" AS t1 ON t0.\"team_fifa_api_id\" = t1.\"team_fifa_api_id\" WHERE t1.\"chanceCreationPassingClass\" = 'Safe'": false
  },
@@ -66,6 +69,7 @@
   "SELECT DISTINCT t0.\"ID\", t0.\"SEX\", t0.\"Birthday\" FROM \"Patient\" AS t0 JOIN \"Laboratory\" AS t1 ON t0.\"ID\" = t1.\"ID\" WHERE t1.\"LDH\" >= 501": true
  },
  "1156_thrombosis_prediction": {
+  "CREATE TEMP TABLE FILTERED_EXAM AS\nSELECT DISTINCT e.\"ID\", e.\"Examination Date\", e.\"aCL IgG\", e.\"aCL IgM\", e.ANA, e.\"ANA Pattern\", e.\"aCL IgA\", e.Diagnosis, e.KCT, e.RVVT, e.LAC, e.Symptoms, e.Thrombosis\nFROM Examination AS e\nJOIN Patient AS p ON e.\"ID\" = p.\"ID\"\nWHERE e.RVVT = '+' AND e.LAC = '+' AND p.\"Description\" IS NOT NULL;\n\nCREATE TEMP TABLE CALCULATED_AGE AS\nSELECT \n    t0.\"ID\",\n    CAST(STRFTIME('%Y', CURRENT_TIMESTAMP) - STRFTIME('%Y', t1.Birthday) AS INTEGER) AS AGE\nFROM FILTERED_EXAM AS t0\nJOIN Patient AS t1 ON t0.\"ID\" = t1.\"ID\";\n\nSELECT \"ID\", AGE FROM CALCULATED_AGE ORDER BY \"ID\";": false,
   "SELECT\n  T1.ID,\n  STRFTIME('%Y', CURRENT_TIMESTAMP) - STRFTIME('%Y', T1.Birthday)\nFROM Examination AS T0\nJOIN Patient AS T1\n  ON T0.ID = T1.ID\nWHERE\n  T0.RVVT = '+';": true,
   "SELECT DISTINCT \n    t0.\"ID\", \n    STRFTIME('%Y', CURRENT_TIMESTAMP) - STRFTIME('%Y', t1.Birthday) AS age_diff\nFROM \"Examination\" AS t0\nJOIN \"Patient\" AS t1 ON t0.\"ID\" = t1.\"ID\"\nWHERE t0.\"RVVT\" = '+' \n  AND t0.\"LAC\" = '+'\n  AND t1.\"Description\" IS NOT NULL;": false,
   "SELECT DISTINCT t0.\"ID\", \n       STRFTIME('%Y', CURRENT_TIMESTAMP) - STRFTIME('%Y', t1.\"Birthday\") \nFROM \"Examination\" AS t0 \nJOIN \"Patient\" AS t1 ON t0.\"ID\" = t1.\"ID\" \nWHERE t0.\"RVVT\" = '+' \n  AND t0.\"LAC\" = '+'\n  AND t1.\"Description\" IS NOT NULL;": false
@@ -82,6 +86,7 @@
  },
  "119_financial": {
   "SELECT\n  t0.account_id,\n  t1.A2,\n  t1.A3\nFROM account AS t0\nJOIN district AS t1\n  ON t0.district_id = t1.district_id\nWHERE\n  t0.frequency = 'POPLATEK PO OBRATU' AND STRFTIME('%Y', t0.date) = '1993';": true,
+  "SELECT DISTINCT t0.\"account_id\", t1.\"A2\", t1.\"A3\"\nFROM \"account\" AS t0\nJOIN \"district\" AS t1 ON t0.\"district_id\" = t1.\"district_id\"\nWHERE t0.\"frequency\" = 'POPLATEK PO OBRATU'\n  AND STRFTIME('%Y', t0.\"date\") = '1993';": true,
   "SELECT DISTINCT t0.\"account_id\", t1.\"A2\", t1.\"A3\" FROM \"account\" AS t0 JOIN \"district\" AS t1 ON t0.\"district_id\" = t1.\"district_id\" WHERE t0.\"frequency\" = 'POPLATEK PO OBRATU' AND STRFTIME('%Y', t0.\"date\") = '1993'": true,
   "SELECT t0.\"account_id\", t1.\"A2\", t1.\"A3\"\nFROM \"account\" AS t0\nJOIN \"district\" AS t1 ON t0.\"district_id\" = t1.\"district_id\"\nWHERE t0.\"frequency\" = 'POPLATEK PO OBRATU'\n  AND STRFTIME('%Y', t0.\"date\") = '1993';": true
  },
@@ -96,6 +101,7 @@
   "SELECT DISTINCT t0.\"ID\", t0.\"SEX\", t0.\"Birthday\" FROM \"Patient\" AS t0 JOIN \"Laboratory\" AS t1 ON t0.\"ID\" = t1.\"ID\" WHERE t1.\"UN\" = 29": true
  },
  "1225_thrombosis_prediction": {
+  "SELECT DISTINCT t0.\"ID\", t0.\"SEX\"\nFROM \"Patient\" AS t0\nJOIN \"Laboratory\" AS t1 ON t0.\"ID\" = t1.\"ID\"\nWHERE t1.\"T-BIL\" >= 2.0;": true,
   "SELECT DISTINCT t0.\"ID\", t0.\"SEX\" \nFROM \"Patient\" AS t0 \nJOIN \"Laboratory\" AS t1 ON t0.\"ID\" = t1.\"ID\" \nWHERE t1.\"T-BIL\" >= 2.0": true,
   "SELECT DISTINCT t0.\"ID\", t0.\"SEX\" FROM \"Patient\" AS t0 JOIN \"Laboratory\" AS t1 ON t0.\"ID\" = t1.\"ID\" WHERE t1.\"T-BIL\" >= 2.0": true,
   "SELECT DISTINCT t0.ID, t0.SEX\nFROM Patient AS t0\nJOIN Laboratory AS t1 ON t0.ID = t1.ID\nWHERE t1.\"T-BIL\" >= 2.0;": true
@@ -124,6 +130,7 @@
   "SELECT DISTINCT t0.\"date_received\" FROM \"income\" AS t0 JOIN \"member\" AS t1 ON t0.\"link_to_member\" = t1.\"member_id\" WHERE t1.\"link_to_major\" = 'recaJdSK83k6ekRJL'": false
  },
  "1375_student_club": {
+  "SELECT DISTINCT t1.\"first_name\", t1.\"last_name\"\nFROM \"major\" AS t0\nJOIN \"member\" AS t1 ON t0.\"major_id\" = t1.\"link_to_major\"\nWHERE t0.\"department\" = 'School of Applied Sciences, Technology and Education'\n  AND t1.\"t_shirt_size\" IN ('Large', 'Medium');": false,
   "SELECT DISTINCT t1.\"first_name\", t1.\"last_name\" \nFROM \"major\" AS t0 \nJOIN \"member\" AS t1 ON t0.\"major_id\" = t1.\"link_to_major\" \nWHERE t0.\"department\" = 'School of Applied Sciences, Technology and Education' \n  AND t0.\"college\" = 'College of Agriculture and Applied Sciences';": false,
   "SELECT DISTINCT t1.\"first_name\", t1.\"last_name\" FROM \"major\" AS t0 JOIN \"member\" AS t1 ON t0.\"major_id\" = t1.\"link_to_major\" WHERE t0.\"department\" = 'School of Applied Sciences, Technology and Education'": true
  },
@@ -189,15 +196,18 @@
   "SELECT DISTINCT t0.\"bond_type\", t1.\"atom_id\", t1.\"atom_id2\" FROM \"bond\" AS t0 JOIN \"connected\" AS t1 ON t0.\"bond_id\" = t1.\"bond_id\" WHERE t0.\"bond_id\" = 'TR001_6_9'": true
  },
  "341_card_games": {
+  "SELECT DISTINCT \"id\" FROM \"cards\" AS t0 \nWHERE t0.\"borderColor\" = 'borderless' \n  AND t0.\"cardKingdomId\" IS NULL;": true,
   "SELECT DISTINCT \"id\" FROM \"cards\" WHERE \"borderColor\" = 'borderless' AND \"cardKingdomId\" IS NULL;": true,
   "SELECT DISTINCT t0.\"id\" \nFROM \"cards\" AS t0 \nWHERE t0.\"borderColor\" = 'borderless' \n  AND t0.\"cardKingdomId\" IS NULL;": true,
   "SELECT id FROM cards WHERE borderColor = 'borderless' AND cardKingdomId IS NULL;": true
  },
  "347_card_games": {
   "SELECT DISTINCT t0.\"id\", t1.\"text\", t0.\"hasAlternativeDeckLimit\" FROM \"cards\" AS t0 JOIN \"rulings\" AS t1 ON t0.\"uuid\" = t1.\"uuid\" WHERE t0.\"artist\" = 'Stephen Daniele'": true,
+  "SELECT DISTINCT t0.\"id\", t1.\"text\", t0.\"hasContentWarning\"\nFROM \"cards\" AS t0\nJOIN \"rulings\" AS t1 ON t0.\"uuid\" = t1.\"uuid\"\nWHERE t0.\"artist\" = 'Stephen Daniele';": true,
   "SELECT DISTINCT t0.\"id\", t1.\"text\", t0.\"hasContentWarning\" FROM \"cards\" AS t0 JOIN \"rulings\" AS t1 ON t0.\"uuid\" = t1.\"uuid\" WHERE t0.\"artist\" = 'Stephen Daniele'": true
  },
  "379_card_games": {
+  "SELECT DISTINCT \"id\" FROM \"cards\" AS t0 WHERE t0.\"duelDeck\" = 'a';": true,
   "SELECT DISTINCT \"id\" FROM \"cards\" WHERE \"duelDeck\" = 'a'": true,
   "SELECT DISTINCT t0.\"id\" \nFROM \"cards\" AS t0 \nWHERE t0.\"duelDeck\" = 'a'": true,
   "SELECT id FROM cards WHERE duelDeck = 'a';": true
@@ -231,7 +241,8 @@
  "704_codebase_community": {
   "SELECT\n  ExcerptPostId,\n  WikiPostId\nFROM tags\nWHERE\n  TagName = 'sample';": true,
   "SELECT DISTINCT t0.\"ExcerptPostId\", t0.\"WikiPostId\" \nFROM \"tags\" AS t0 \nWHERE t0.\"TagName\" = 'sample';": true,
-  "SELECT DISTINCT t0.\"ExcerptPostId\", t0.\"WikiPostId\" FROM \"tags\" AS t0 WHERE t0.\"TagName\" = 'sample'": true
+  "SELECT DISTINCT t0.\"ExcerptPostId\", t0.\"WikiPostId\" FROM \"tags\" AS t0 WHERE t0.\"TagName\" = 'sample'": true,
+  "SELECT DISTINCT t0.\"ExcerptPostId\", t0.\"WikiPostId\" FROM \"tags\" AS t0 WHERE t0.\"TagName\" = 'sample';": true
  },
  "705_codebase_community": {
   "SELECT DISTINCT t1.\"Reputation\", t1.\"UpVotes\" \nFROM \"comments\" AS t0 \nJOIN \"users\" AS t1 ON t0.\"UserId\" = t1.\"Id\" \nWHERE t1.\"Views\" = 1126;": false,
@@ -239,6 +250,7 @@
   "SELECT Reputation, UpVotes FROM users WHERE Id = UpVotes;": false
  },
  "724_superhero": {
+  "SELECT DISTINCT t1.\"superhero_name\"\nFROM \"colour\" AS t0\nJOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"hair_colour_id\"\nWHERE t0.\"colour\" = 'Blond' AND t1.\"eye_colour_id\" = 7;": true,
   "SELECT DISTINCT t1.\"superhero_name\" \nFROM \"colour\" AS t0 \nJOIN \"superhero\" AS t1 \nON t0.\"id\" = t1.\"eye_colour_id\" \nWHERE t0.\"colour\" = 'Blue' \n  AND t1.\"hair_colour_id\" = 6;": true,
   "SELECT DISTINCT t1.\"superhero_name\" FROM \"colour\" AS t0 JOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"hair_colour_id\" WHERE t0.\"colour\" = 'Blond' AND t1.\"eye_colour_id\" = 7\nUNION\nSELECT DISTINCT t1.\"superhero_name\" FROM \"colour\" AS t0 JOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"eye_colour_id\" WHERE t0.\"colour\" = 'Blue' AND t1.\"hair_colour_id\" = 6;": true
  },
@@ -272,6 +284,7 @@
  },
  "782_superhero": {
   "SELECT DISTINCT\n  t1.superhero_name\nFROM superhero AS t1\nJOIN colour AS t2\n  ON t1.eye_colour_id = t2.id\nJOIN colour AS t3\n  ON t1.hair_colour_id = t3.id\nWHERE\n  t2.colour = 'Black' AND t3.colour = 'Black';": true,
+  "SELECT DISTINCT t1.\"superhero_name\"\nFROM \"colour\" AS t0\nJOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"hair_colour_id\"\nWHERE t0.\"colour\" = 'Black' AND t1.\"eye_colour_id\" = 4;": true,
   "SELECT DISTINCT t1.\"superhero_name\" FROM \"colour\" AS t0 JOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"hair_colour_id\" WHERE t0.\"colour\" = 'Black' AND t1.\"eye_colour_id\" = 4": true,
   "SELECT DISTINCT t1.\"superhero_name\" FROM \"colour\" AS t0 JOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"hair_colour_id\" WHERE t0.\"colour\" = 'Black' AND t1.\"eye_colour_id\" = 4\nUNION\nSELECT DISTINCT t1.\"superhero_name\" FROM \"colour\" AS t0 JOIN \"superhero\" AS t1 ON t0.\"id\" = t1.\"eye_colour_id\" WHERE t0.\"colour\" = 'Black' AND t1.\"hair_colour_id\" = 4;": true
  },
@@ -301,6 +314,7 @@
  },
  "854_formula_1": {
   "SELECT DISTINCT t0.\"lat\", t0.\"lng\" \nFROM \"circuits\" AS t0 \nJOIN \"races\" AS t1 ON t0.\"circuitId\" = t1.\"circuitId\" \nWHERE t1.\"name\" = 'Australian Grand Prix';": true,
+  "SELECT DISTINCT t0.\"lat\", t0.\"lng\" FROM \"circuits\" AS t0 WHERE t0.\"alt\" IS NULL AND t0.\"lat\" IS NOT NULL ORDER BY t0.\"lat\" ASC LIMIT 1;": false,
   "SELECT DISTINCT t0.\"lat\", t0.\"lng\" FROM \"circuits\" AS t0 WHERE t0.\"country\" = 'Australia'": false,
   "SELECT lat, lng FROM circuits ORDER BY lat ASC LIMIT 1;": false
  },
