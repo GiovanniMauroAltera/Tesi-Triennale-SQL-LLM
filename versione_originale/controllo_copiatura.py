@@ -18,6 +18,9 @@ entrambi i controlli.
 
 Aggiunge "valutazione_robusta" ai JSON in versione_originale/risultati_benchmark/; non richiama nessun modello e puo'
 girare mentre il benchmark e' in corso.
+
+Come si usa (dalla cartella principale della repository):
+  python versione_originale/controllo_copiatura.py
 """
 import glob
 import json
@@ -26,7 +29,7 @@ import random
 import re
 import time
 
-from funzioni_comuni import _q, carica_caso, valuta_accuratezza
+from funzioni_comuni import nome_sql, carica_caso, valuta_accuratezza
 from codice_benchmark import CARTELLA_RISULTATI, CASO_DEMO, elenco_casi, id_caso
 
 N_VARIANTI = 3
@@ -48,42 +51,68 @@ def sql_gold(percorso_caso, cursor):
     return cursor.execute("SELECT sql_gold FROM _bird_info").fetchone()[0].strip().rstrip(";")
 
 
-def con_timeout(conn, funzione):
+def esegui_con_timeout(conn, sql, e_uno_script):
+    """Esegue sql e si ferma dopo TIMEOUT_QUERY_SECONDI.
+
+    Con e_uno_script=False sql e' una sola query e la funzione restituisce le sue righe; con True sql puo'
+    contenere piu' istruzioni (come le risposte dei modelli) e la funzione non restituisce niente.
+    """
     inizio = time.time()
-    conn.set_progress_handler(lambda: 1 if time.time() - inizio > TIMEOUT_QUERY_SECONDI else 0, 100000)
+
+    def troppo_tempo():
+        # SQLite chiama questa funzione ogni tanto mentre lavora: se restituisce 1, la query si ferma.
+        if time.time() - inizio > TIMEOUT_QUERY_SECONDI:
+            return 1
+        return 0
+
+    conn.set_progress_handler(troppo_tempo, 100000)
     try:
-        return funzione()
+        if e_uno_script:
+            conn.executescript(sql)
+            return None
+        return conn.execute(sql).fetchall()
     finally:
         conn.set_progress_handler(None, 0)
 
 
 def perturba(conn, tabelle, seme):
+    """Toglie a caso il 30% delle righe di ogni tabella di partenza (sempre le stesse, dato il seme)."""
     rng = random.Random(seme)
     cursor = conn.cursor()
     for tabella in tabelle:
-        rowid = [r[0] for r in cursor.execute(f"SELECT rowid FROM {_q(tabella)}")]
+        rowid = []
+        for riga in cursor.execute(f"SELECT rowid FROM {nome_sql(tabella)}"):
+            rowid.append(riga[0])
         da_rimuovere = rng.sample(rowid, int(len(rowid) * FRAZIONE_RIMOSSA))
-        cursor.executemany(f"DELETE FROM {_q(tabella)} WHERE rowid = ?", [(r,) for r in da_rimuovere])
+        parametri = []
+        for numero in da_rimuovere:
+            parametri.append((numero,))  # executemany vuole una tupla di valori per ogni esecuzione
+        cursor.executemany(f"DELETE FROM {nome_sql(tabella)} WHERE rowid = ?", parametri)
 
 
 def firma(righe):
-    return sorted(repr(r) for r in righe)
+    """Le righe in un ordine fisso, per confrontare due risultati senza badare all'ordine."""
+    testi = []
+    for riga in righe:
+        testi.append(repr(riga))
+    testi.sort()
+    return testi
 
 
 def varianti_del_caso(percorso_caso):
     """Semi delle varianti in cui la query gold cambia risultato (e non diventa vuota)."""
     conn, cursor, sorgenti, nome_target = carica_caso(percorso_caso)
     gold = sql_gold(percorso_caso, cursor)
-    originale = firma(cursor.execute(f"SELECT * FROM {_q(nome_target)}").fetchall())
+    originale = firma(cursor.execute(f"SELECT * FROM {nome_sql(nome_target)}").fetchall())
     conn.close()
 
     semi = []
     for k in range(MAX_TENTATIVI_VARIANTE):
         seme = f"{id_caso(percorso_caso)}-{k}"
-        conn, cursor, sorgenti, _ = carica_caso(percorso_caso)
+        conn, cursor, sorgenti, nome_target = carica_caso(percorso_caso)
         perturba(conn, sorgenti, seme)
         try:
-            righe = con_timeout(conn, lambda: cursor.execute(gold).fetchall())
+            righe = esegui_con_timeout(conn, gold, False)
         except Exception:
             righe = []
         conn.close()
@@ -95,12 +124,14 @@ def varianti_del_caso(percorso_caso):
 
 
 def valuta_su_variante(percorso_caso, gold, seme, query_modello):
-    conn, cursor, sorgenti, _ = carica_caso(percorso_caso)
+    conn, cursor, sorgenti, nome_target = carica_caso(percorso_caso)
     perturba(conn, sorgenti, seme)
-    cursor.execute(f"CREATE TABLE main.{_q(TABELLA_ATTESA_VARIANTE)} AS {gold}")
+    cursor.execute(f"CREATE TABLE main.{nome_sql(TABELLA_ATTESA_VARIANTE)} AS {gold}")
     try:
-        con_timeout(conn, lambda: conn.executescript(query_modello))
-        tabelle_create = [r[0] for r in cursor.execute("SELECT name FROM sqlite_temp_master WHERE type='table'")]
+        esegui_con_timeout(conn, query_modello, True)
+        tabelle_create = []
+        for riga in cursor.execute("SELECT name FROM sqlite_temp_master WHERE type='table'"):
+            tabelle_create.append(riga[0])
     except Exception:
         tabelle_create = []
     valutazione = valuta_accuratezza(cursor, tabelle_create, TABELLA_ATTESA_VARIANTE)
@@ -116,24 +147,47 @@ def valori_copiati(sql, righe_finali):
     il controllo sui dati modificati non vede: valori scritti a mano e poi uniti alle tabelle di
     partenza con un JOIN, o usati in un filtro IN (...). Togliendo righe a caso, la query copiata e
     quella gold perdono le stesse righe e il risultato coincide ancora.
+
+    Restituisce (True se e' una copiatura, i testi copiati in ordine alfabetico).
     """
-    senza_commenti = re.sub(r"--[^\n]*|/\*.*?\*/", "", sql or "", flags=re.DOTALL)
-    scritti_a_mano = {t.replace("''", "'") for t in re.findall(r"'((?:[^']|'')*)'", senza_commenti)}
-    testi_finali = {v for riga in righe_finali for v in riga if isinstance(v, str) and len(v.strip()) >= 2}
-    copiati = sorted(testi_finali & scritti_a_mano)
-    return len(testi_finali) >= 2 and len(copiati) >= max(2, len(testi_finali) / 2), copiati
+    if not sql:
+        sql = ""
+    senza_commenti = re.sub(r"--[^\n]*|/\*.*?\*/", "", sql, flags=re.DOTALL)
+    # I testi tra apici nella query: '' dentro un testo e' un apice scritto due volte.
+    scritti_a_mano = set()
+    for testo in re.findall(r"'((?:[^']|'')*)'", senza_commenti):
+        scritti_a_mano.add(testo.replace("''", "'"))
+    testi_finali = set()
+    for riga in righe_finali:
+        for valore in riga:
+            if isinstance(valore, str) and len(valore.strip()) >= 2:
+                testi_finali.add(valore)
+    copiati = sorted(testi_finali & scritti_a_mano)  # i testi presenti in tutti e due gli insiemi
+    copiatura = len(testi_finali) >= 2 and len(copiati) >= max(2, len(testi_finali) / 2)
+    return copiatura, copiati
 
 
 def righe_target(percorso_caso):
-    conn, cursor, _, nome_target = carica_caso(percorso_caso)
-    righe = cursor.execute(f"SELECT * FROM {_q(nome_target)}").fetchall()
+    conn, cursor, sorgenti, nome_target = carica_caso(percorso_caso)
+    righe = cursor.execute(f"SELECT * FROM {nome_sql(nome_target)}").fetchall()
     conn.close()
     return righe
 
 
+def e_esatto(risultato):
+    """True se la prova ha dato il risultato esatto sui dati originali."""
+    valutazione = risultato.get("valutazione")
+    if not valutazione:
+        return False
+    return bool(valutazione.get("esatto"))
+
+
 def main():
-    percorsi_casi = {id_caso(p): p for p in elenco_casi()}
-    cache_varianti, cache_target = {}, {}
+    percorsi_casi = {}  # nome del caso -> percorso del file
+    for percorso in elenco_casi():
+        percorsi_casi[id_caso(percorso)] = percorso
+    cache_varianti = {}
+    cache_target = {}
     aggiornati = 0
     for percorso_json in sorted(glob.glob(os.path.join(CARTELLA_RISULTATI, "*.json"))):
         try:
@@ -143,7 +197,7 @@ def main():
             continue  # file in scrittura dal benchmark in corso: verra' ripreso al prossimo avvio
         if risultato["caso"] not in percorsi_casi:
             continue
-        esatto = bool((risultato.get("valutazione") or {}).get("esatto"))
+        esatto = e_esatto(risultato)
         robusta = risultato.get("valutazione_robusta")
         if robusta is not None and "copiatura_nel_testo" in robusta:
             continue  # gia' controllato con entrambi i metodi
@@ -169,17 +223,23 @@ def main():
                            "nota": "nessuna variante cambia il risultato gold: copiatura non rilevabile"}
             else:
                 esiti = []
+                tutte_esatte = True
                 for seme in semi:
                     v = valuta_su_variante(percorso_caso, gold, seme, risultato["query_generata"])
                     esiti.append({"seme": seme, "esatto": v["esatto"], "f1": v["f1"]})
-                robusta = {"esatto_robusto": all(e["esatto"] for e in esiti), "verificabile": True, "varianti": esiti}
+                    if not v["esatto"]:
+                        tutte_esatte = False
+                robusta = {"esatto_robusto": tutte_esatte, "verificabile": True, "varianti": esiti}
 
         risultato["valutazione_robusta"] = robusta
         aggiungi_controllo_testo(risultato, percorsi_casi, cache_target)
         salva(percorso_json, risultato)
         aggiornati += 1
         if esatto:
-            stato = "ROBUSTO" if robusta["esatto_robusto"] else "NON ROBUSTO"
+            if robusta["esatto_robusto"]:
+                stato = "ROBUSTO"
+            else:
+                stato = "NON ROBUSTO"
             if robusta["copiatura_nel_testo"]:
                 stato += " (copiatura nel testo)"
             elif not robusta["verificabile"]:
@@ -193,7 +253,7 @@ def aggiungi_controllo_testo(risultato, percorsi_casi, cache_target):
     """Un risultato esatto che contiene i valori della tabella target scritti a mano non e' robusto."""
     robusta = risultato["valutazione_robusta"]
     robusta["copiatura_nel_testo"] = False
-    if not (risultato.get("valutazione") or {}).get("esatto"):
+    if not e_esatto(risultato):
         return
     caso = risultato["caso"]
     if caso not in cache_target:

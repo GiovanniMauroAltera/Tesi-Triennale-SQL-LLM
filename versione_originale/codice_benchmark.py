@@ -1,3 +1,13 @@
+"""Il benchmark della versione originale: ogni modello prova ogni caso piu' volte, e ogni prova viene valutata.
+
+Per ogni prova salva in versione_originale/risultati_benchmark/ un file .json (query, valutazione, tempo) e un
+file .log.txt (la risposta completa del modello). Se si interrompe riparte da dove era rimasto.
+
+Come si usa (dalla cartella principale della repository):
+  python versione_originale/codice_benchmark.py
+  python versione_originale/codice_benchmark.py --modelli gemma nemotron
+  python versione_originale/codice_benchmark.py --modelli llama3.1 --parte 1/2    (e in un altro terminale 2/2)
+"""
 import argparse
 import contextlib
 import ctypes
@@ -38,14 +48,6 @@ MAX_TOKEN_RISPOSTA_OLLAMA = 3072  # senza tetto un modello locale puo' entrare i
 TIMEOUT_OLLAMA_SECONDI = 1800
 PAUSA_DOPO_GUASTO_SECONDI = 600  # dopo un run rimandato per guasto del fornitore, prima di passare al successivo
 
-
-def attesa_dopo_errore(errore_testo, tentativo):
-    # 429 (rate limit) ed errori 5xx del server tendono a durare qualche minuto: attesa progressiva.
-    testo = errore_testo.lower()
-    if "429" in testo or "rate" in testo or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")):
-        return ATTESA_RETRY_RATE_LIMIT_SECONDI * tentativo
-    return ATTESA_RETRY_SECONDI
-
 # Tutti gli script si lanciano dalla cartella principale della repository: i casi sono in comune con la
 # versione ottimizzata, i risultati restano nella cartella di questa versione.
 CARTELLA_RISULTATI = os.path.join("versione_originale", "risultati_benchmark")
@@ -72,8 +74,30 @@ ENDPOINT_OPENAI_COMPATIBILI = {
 }
 
 
+# Due tipi di errore "nostri": esegui_run li solleva (raise) e main li riconosce (except) per decidere
+# se mettere in pausa il modello fino al giorno dopo o rimandare solo quel run.
 class QuotaGiornalieraEsaurita(Exception):
     pass
+
+
+class GuastoTemporaneoFornitore(Exception):
+    pass
+
+
+def e_errore_del_server(testo):
+    """Gli errori 500, 502, 503 e 504: il server del fornitore e' in difficolta'."""
+    for codice in ("500", "502", "503", "504"):
+        if f"error code: {codice}" in testo:
+            return True
+    return False
+
+
+def attesa_dopo_errore(errore_testo, tentativo):
+    # 429 (rate limit) ed errori 5xx del server tendono a durare qualche minuto: attesa progressiva.
+    testo = errore_testo.lower()
+    if "429" in testo or "rate" in testo or e_errore_del_server(testo):
+        return ATTESA_RETRY_RATE_LIMIT_SECONDI * tentativo
+    return ATTESA_RETRY_SECONDI
 
 
 def e_limite_giornaliero(errore_testo):
@@ -81,16 +105,12 @@ def e_limite_giornaliero(errore_testo):
     return "429" in testo and ("per day" in testo or "per-day" in testo)
 
 
-class GuastoTemporaneoFornitore(Exception):
-    pass
-
-
 def e_guasto_temporaneo(errore_testo):
     # Server sovraccarico o in errore, limite al minuto, rete assente, richiesta rimasta appesa oltre il
     # timeout (tarato ben sopra i tempi di risposta osservati): non dice nulla sul modello.
     testo = errore_testo.lower()
     return ("429" in testo or "connection error" in testo or "timed out" in testo
-            or any(f"error code: {c}" in testo for c in ("500", "502", "503", "504")))
+            or e_errore_del_server(testo))
 
 
 def n_run(nome_modello):
@@ -142,8 +162,12 @@ def chiama_modello(config, prompt):
         if not response.choices:
             # OpenRouter a volte risponde 200 con l'errore del fornitore nel corpo al posto di "choices":
             # lo rendiamo leggibile, con il codice nel formato che attesa_dopo_errore riconosce.
-            errore = (response.model_extra or {}).get("error")
-            codice = errore.get("code", "?") if isinstance(errore, dict) else "?"
+            errore = None
+            if response.model_extra:
+                errore = response.model_extra.get("error")
+            codice = "?"
+            if isinstance(errore, dict):
+                codice = errore.get("code", "?")
             raise RuntimeError(f"Error code: {codice} - risposta senza choices dal fornitore: {errore}")
         contenuto = response.choices[0].message.content
         troncata = response.choices[0].finish_reason == "length"
@@ -205,6 +229,7 @@ def esegui_run(percorso_caso, nome_modello, indice_run):
 
     if errore_finale is None:
         query_completa = estrai_query_sql(testo_risposta)
+        # Quello che esegui_e_stampa scriverebbe sullo schermo finisce in log_buffer, e poi nel file di log.
         with contextlib.redirect_stdout(log_buffer):
             tabelle_create = esegui_e_stampa(cursor, query_completa)
         risultato["query_generata"] = query_completa
@@ -233,12 +258,27 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None, parte=None):
         # (k, n): solo un caso ogni n a partire dal k-esimo, per dividere un modello lento tra n processi
         # paralleli senza che due processi facciano mai la stessa combinazione.
         k, n = parte
-        casi = casi[k - 1::n]
-    modelli_da_usare = solo_modelli or list(MODELLI.keys())
-    run_per_modello = {m: limite_run or n_run(m) for m in modelli_da_usare}
+        scelti = []
+        for posizione, caso in enumerate(casi):
+            if posizione % n == k - 1:
+                scelti.append(caso)
+        casi = scelti
+    if solo_modelli:
+        modelli_da_usare = solo_modelli
+    else:
+        modelli_da_usare = list(MODELLI.keys())
+    run_per_modello = {}
+    for m in modelli_da_usare:
+        if limite_run:
+            run_per_modello[m] = limite_run
+        else:
+            run_per_modello[m] = n_run(m)
 
     totale = len(casi) * sum(run_per_modello.values())
-    descrizione_run = ", ".join(f"{m}: {k} run" for m, k in run_per_modello.items())
+    pezzi = []
+    for m, k in run_per_modello.items():
+        pezzi.append(f"{m}: {k} run")
+    descrizione_run = ", ".join(pezzi)
     print(f"{len(casi)} casi, {descrizione_run} -> {totale} combinazioni totali", flush=True)
 
     completate = 0
@@ -271,8 +311,10 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None, parte=None):
                 v = risultato["valutazione"]
                 if v is None:
                     stato = f"ERRORE: {risultato['errore_chiamata']}"
+                elif v["esatto"]:
+                    stato = f"esatto=SI F1={v['f1'] * 100:.0f}%"
                 else:
-                    stato = f"esatto={'SI' if v['esatto'] else 'NO'} F1={v['f1'] * 100:.0f}%"
+                    stato = f"esatto=NO F1={v['f1'] * 100:.0f}%"
                 print(f"[{id_caso(percorso_caso)}] {nome_modello} run{indice_run}: {stato} ({risultato['tempo_secondi']}s)", flush=True)
 
     print(f"\nCompletate {completate} nuove combinazioni, {saltate} gia' presenti da run precedenti.", flush=True)
@@ -282,23 +324,24 @@ def main(limite_casi=None, limite_run=None, solo_modelli=None, parte=None):
         print(f"Modelli in pausa per quota giornaliera (rilanciare dopo il reset): {sorted(modelli_in_pausa)}", flush=True)
 
 
-@contextlib.contextmanager
-def pc_sveglio():
-    """Chiede a Windows di non andare in sospensione finche' il benchmark e' in esecuzione.
+# Chiede a Windows di non andare in sospensione finche' il benchmark e' in esecuzione.
+#
+# E' una richiesta del programma (come quella dei lettori video), non un cambio di impostazioni:
+# Windows la annulla da solo quando il processo termina. Sui portatili con Modern Standby lo
+# standby parte quando lo schermo si spegne, quindi serve anche tenere acceso lo schermo.
+# Il coperchio chiuso manda comunque in sospensione.
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+ES_DISPLAY_REQUIRED = 0x00000002
 
-    E' una richiesta del programma (come quella dei lettori video), non un cambio di impostazioni:
-    Windows la annulla da solo quando il processo termina. Sui portatili con Modern Standby lo
-    standby parte quando lo schermo si spegne, quindi serve anche tenere acceso lo schermo.
-    Il coperchio chiuso manda comunque in sospensione.
-    """
-    if sys.platform != "win32":
-        yield
-        return
-    ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
-    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
-    try:
-        yield
-    finally:
+
+def tieni_sveglio_il_pc():
+    if sys.platform == "win32":
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
+
+
+def lascia_dormire_il_pc():
+    if sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 
@@ -309,6 +352,12 @@ if __name__ == "__main__":
     parser.add_argument("--parte", metavar="K/N",
                         help="solo un caso ogni N a partire dal K-esimo (es. 1/2 e 2/2 in due processi paralleli)")
     argomenti = parser.parse_args()
-    parte = tuple(int(x) for x in argomenti.parte.split("/")) if argomenti.parte else None
-    with pc_sveglio():
+    parte = None
+    if argomenti.parte:
+        k, n = argomenti.parte.split("/")
+        parte = (int(k), int(n))
+    tieni_sveglio_il_pc()
+    try:
         main(solo_modelli=argomenti.modelli, parte=parte)
+    finally:
+        lascia_dormire_il_pc()

@@ -7,6 +7,9 @@ versione_originale/classifica/:
   - fig_classifica.png, fig_esiti.png, fig_casi.png, fig_tempi.png
 
 Funziona anche a run in corso: le percentuali sono calcolate sui run gia' valutati.
+
+Come si usa (dalla cartella principale della repository):
+  python versione_originale/codice_classifica.py
 """
 import csv
 import glob
@@ -18,7 +21,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 from matplotlib.patches import PathPatch, Patch
 from matplotlib.path import Path
 
@@ -92,10 +94,27 @@ def carica_risultati():
     return risultati
 
 
+def valutazione_di(r):
+    """La valutazione della prova; un dizionario vuoto se non c'e' (per esempio dopo un errore di chiamata)."""
+    v = r.get("valutazione")
+    if not v:
+        return {}
+    return v
+
+
+def prove_di(risultati, modello, caso):
+    """Le prove di un modello su un caso."""
+    prove = []
+    for r in risultati:
+        if r["modello"] == modello and r["caso"] == caso:
+            prove.append(r)
+    return prove
+
+
 def esito(r):
     if r.get("errore_chiamata"):
         return "errore di chiamata"
-    v = r.get("valutazione") or {}
+    v = valutazione_di(r)
     if v.get("esatto"):
         return "esatto"
     if r.get("risposta_troncata"):
@@ -106,7 +125,7 @@ def esito(r):
 
 
 def f1(r):
-    return (r.get("valutazione") or {}).get("f1", 0.0)
+    return valutazione_di(r).get("f1", 0.0)
 
 
 def esatto_robusto(r):
@@ -114,12 +133,16 @@ def esatto_robusto(r):
     if esito(r) != "esatto":
         return False
     robusta = r.get("valutazione_robusta")
-    return None if robusta is None else robusta["esatto_robusto"]
+    if robusta is None:
+        return None
+    return robusta["esatto_robusto"]
 
 
 def non_verificabile(r):
     """Esatto in un caso dove i dati modificati non distinguono una copiatura, e senza copiature nel testo."""
-    robusta = r.get("valutazione_robusta") or {}
+    robusta = r.get("valutazione_robusta")
+    if not robusta:
+        robusta = {}
     return esito(r) == "esatto" and robusta.get("verificabile") is False and not robusta.get("copiatura_nel_testo")
 
 
@@ -128,7 +151,8 @@ def percentile(valori, q):
         return None
     ordinati = sorted(valori)
     k = (len(ordinati) - 1) * q
-    i, frazione = int(k), k - int(k)
+    i = int(k)
+    frazione = k - int(k)
     if i + 1 < len(ordinati):
         return ordinati[i] + (ordinati[i + 1] - ordinati[i]) * frazione
     return ordinati[i]
@@ -137,47 +161,126 @@ def percentile(valori, q):
 def statistiche(risultati, casi_bird):
     righe = []
     for modello in MODELLI:
-        run = [r for r in risultati if r["modello"] == modello and r["caso"] in casi_bird]
-        demo = [r for r in risultati if r["modello"] == modello and r["caso"] == ID_DEMO]
-        esiti = [esito(r) for r in run]
-        esatti_per_caso = {c: sum(1 for r in run if r["caso"] == c and esito(r) == "esatto") for c in casi_bird}
-        run_per_caso = {c: sum(1 for r in run if r["caso"] == c) for c in casi_bird}
-        tempi = [r["tempo_secondi"] for r in run]
+        run = []   # le prove del modello sui casi BIRD
+        demo = []  # le prove del modello sul caso dei PC
+        for r in risultati:
+            if r["modello"] == modello and r["caso"] in casi_bird:
+                run.append(r)
+            if r["modello"] == modello and r["caso"] == ID_DEMO:
+                demo.append(r)
         n = len(run)
+
+        esiti = []
+        tempi = []
+        valori_f1 = []
+        esatti_robusti = 0
+        robustezza_mancante = 0
+        non_verificabili = 0
+        for r in run:
+            esiti.append(esito(r))
+            tempi.append(r["tempo_secondi"])
+            valori_f1.append(f1(r))
+            if esatto_robusto(r):
+                esatti_robusti += 1
+            if esatto_robusto(r) is None:
+                robustezza_mancante += 1
+            if non_verificabile(r):
+                non_verificabili += 1
+
+        # Per ogni caso: quante prove e quante con risultato esatto.
+        esatti_per_caso = {}
+        run_per_caso = {}
+        for c in casi_bird:
+            esatti_per_caso[c] = 0
+            run_per_caso[c] = 0
+        for r in run:
+            run_per_caso[r["caso"]] += 1
+            if esito(r) == "esatto":
+                esatti_per_caso[r["caso"]] += 1
+        casi_risolti_almeno_una_volta = 0
+        casi_risolti_sempre = 0
+        for c in casi_bird:
+            if esatti_per_caso[c] > 0:
+                casi_risolti_almeno_una_volta += 1
+            if run_per_caso[c] == n_run(modello) and esatti_per_caso[c] == run_per_caso[c]:
+                casi_risolti_sempre += 1
+
+        conteggio_esiti = {}
+        for e in ESITI:
+            conteggio_esiti[e] = esiti.count(e)
+
+        demo_esatti = 0
+        demo_esatti_robusti = 0
+        demo_f1 = []
+        for r in demo:
+            if esito(r) == "esatto":
+                demo_esatti += 1
+            if esatto_robusto(r):
+                demo_esatti_robusti += 1
+            demo_f1.append(f1(r))
+
+        if n:
+            pct_esatti = 100 * esiti.count("esatto") / n
+            pct_esatti_robusti = 100 * esatti_robusti / n
+            f1_medio = 100 * statistics.mean(valori_f1)
+        else:
+            pct_esatti = 0.0
+            pct_esatti_robusti = 0.0
+            f1_medio = 0.0
+        if demo:
+            demo_f1_medio = 100 * statistics.mean(demo_f1)
+        else:
+            demo_f1_medio = 0.0
+
         righe.append({
             "modello": modello,
             "nome": NOMI_MODELLI.get(modello, modello),
             "run_valutati": n,
             "run_previsti": len(casi_bird) * n_run(modello),
             "esatti": esiti.count("esatto"),
-            "pct_esatti": 100 * esiti.count("esatto") / n if n else 0.0,
-            "esatti_robusti": sum(1 for r in run if esatto_robusto(r)),
-            "pct_esatti_robusti": 100 * sum(1 for r in run if esatto_robusto(r)) / n if n else 0.0,
-            "robustezza_mancante": sum(1 for r in run if esatto_robusto(r) is None),
-            "non_verificabili": sum(1 for r in run if non_verificabile(r)),
-            "f1_medio": 100 * statistics.mean(f1(r) for r in run) if n else 0.0,
-            "casi_risolti_almeno_una_volta": sum(1 for c in casi_bird if esatti_per_caso[c] > 0),
-            "casi_risolti_sempre": sum(1 for c in casi_bird
-                                       if run_per_caso[c] == n_run(modello) and esatti_per_caso[c] == run_per_caso[c]),
+            "pct_esatti": pct_esatti,
+            "esatti_robusti": esatti_robusti,
+            "pct_esatti_robusti": pct_esatti_robusti,
+            "robustezza_mancante": robustezza_mancante,
+            "non_verificabili": non_verificabili,
+            "f1_medio": f1_medio,
+            "casi_risolti_almeno_una_volta": casi_risolti_almeno_una_volta,
+            "casi_risolti_sempre": casi_risolti_sempre,
             "casi_totali": len(casi_bird),
-            "esiti": {e: esiti.count(e) for e in ESITI},
+            "esiti": conteggio_esiti,
             "tempo_mediano_s": percentile(tempi, 0.5),
             "tempo_q1_s": percentile(tempi, 0.25),
             "tempo_q3_s": percentile(tempi, 0.75),
-            "demo_esatti": sum(1 for r in demo if esito(r) == "esatto"),
-            "demo_esatti_robusti": sum(1 for r in demo if esatto_robusto(r)),
+            "demo_esatti": demo_esatti,
+            "demo_esatti_robusti": demo_esatti_robusti,
             "demo_run": len(demo),
-            "demo_f1_medio": 100 * statistics.mean(f1(r) for r in demo) if demo else 0.0,
+            "demo_f1_medio": demo_f1_medio,
         })
-    # Metrica piu' severa per prima: un esatto ottenuto copiando i valori del target non regge sui dati modificati.
-    righe.sort(key=lambda s: (-s["pct_esatti_robusti"], -s["pct_esatti"], -s["f1_medio"]))
-    return righe
+    return ordina_classifica(righe)
+
+
+def ordina_classifica(righe):
+    """Metrica piu' severa per prima: un esatto ottenuto copiando i valori del target non regge sui dati modificati.
+
+    A pari merito conta la percentuale di risultati corretti, poi la correttezza parziale, poi l'ordine di MODELLI.
+    I valori hanno il segno meno perche' l'ordinamento va dal piu' piccolo al piu' grande.
+    """
+    chiavi = []
+    for posizione, s in enumerate(righe):
+        chiavi.append((-s["pct_esatti_robusti"], -s["pct_esatti"], -s["f1_medio"], posizione))
+    chiavi.sort()
+    ordinate = []
+    for chiave in chiavi:
+        ordinate.append(righe[chiave[3]])
+    return ordinate
 
 
 # -- tabelle ----------------------------------------------------------------------
 
 def fmt_tempo(s):
-    return "n.d." if s is None else f"{s:.0f}"
+    if s is None:
+        return "n.d."
+    return f"{s:.0f}"
 
 
 def pct(x):
@@ -186,42 +289,61 @@ def pct(x):
 
 def descrizione_run():
     """Es. "3 prove per caso (8 per Gemma 4 31B e Qwen2.5-Coder 7B)"."""
-    per_numero = {}
+    per_numero = {}  # numero di prove -> i modelli che ne hanno fatte tante
     for modello, k in N_RUN_PER_MODELLO.items():
-        per_numero.setdefault(k, []).append(NOMI_MODELLI.get(modello, modello).split(" (")[0])
-    eccezioni = "; ".join(f"{k} per {' e '.join(nomi)}" for k, nomi in per_numero.items())
-    return f"{N_RUN} prove per caso" + (f" ({eccezioni})" if eccezioni else "")
+        if k not in per_numero:
+            per_numero[k] = []
+        per_numero[k].append(NOMI_MODELLI.get(modello, modello).split(" (")[0])
+    pezzi = []
+    for k, nomi in per_numero.items():
+        pezzi.append(f"{k} per {' e '.join(nomi)}")
+    eccezioni = "; ".join(pezzi)
+    if eccezioni:
+        return f"{N_RUN} prove per caso ({eccezioni})"
+    return f"{N_RUN} prove per caso"
 
 
 def scrivi_tabelle(stats, risultati, casi_bird):
     with open(os.path.join(CARTELLA_USCITA, "classifica_modelli.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["posizione", "modello", "prove_valutate", "prove_previste",
-                    "corretti_senza_copiature", "pct_corretti_senza_copiature",
-                    "risultati_corretti", "pct_risultati_corretti", "correttezza_parziale",
-                    "corretti_non_verificabili", "controllo_copiatura_mancante",
-                    "casi_risolti_almeno_una_volta", "casi_risolti_in_tutte_le_prove", "casi_totali",
-                    *[f"n_{etichetta_esito(e).replace(' ', '_')}" for e in ESITI],
-                    "tempo_mediano_s", "tempo_q1_s", "tempo_q3_s",
-                    "demo_corretti_senza_copiature", "demo_risultati_corretti", "demo_prove", "demo_correttezza_parziale"])
+        intestazione = ["posizione", "modello", "prove_valutate", "prove_previste",
+                        "corretti_senza_copiature", "pct_corretti_senza_copiature",
+                        "risultati_corretti", "pct_risultati_corretti", "correttezza_parziale",
+                        "corretti_non_verificabili", "controllo_copiatura_mancante",
+                        "casi_risolti_almeno_una_volta", "casi_risolti_in_tutte_le_prove", "casi_totali"]
+        for e in ESITI:
+            intestazione.append(f"n_{etichetta_esito(e).replace(' ', '_')}")
+        intestazione += ["tempo_mediano_s", "tempo_q1_s", "tempo_q3_s",
+                         "demo_corretti_senza_copiature", "demo_risultati_corretti", "demo_prove", "demo_correttezza_parziale"]
+        w.writerow(intestazione)
         for i, s in enumerate(stats, 1):
-            w.writerow([i, s["nome"], s["run_valutati"], s["run_previsti"], s["esatti_robusti"], f"{s['pct_esatti_robusti']:.1f}",
-                        s["esatti"], f"{s['pct_esatti']:.1f}", f"{s['f1_medio']:.1f}", s["non_verificabili"], s["robustezza_mancante"],
-                        s["casi_risolti_almeno_una_volta"], s["casi_risolti_sempre"], s["casi_totali"],
-                        *[s["esiti"][e] for e in ESITI],
-                        fmt_tempo(s["tempo_mediano_s"]), fmt_tempo(s["tempo_q1_s"]), fmt_tempo(s["tempo_q3_s"]),
-                        s["demo_esatti_robusti"], s["demo_esatti"], s["demo_run"], f"{s['demo_f1_medio']:.1f}"])
+            riga = [i, s["nome"], s["run_valutati"], s["run_previsti"], s["esatti_robusti"], f"{s['pct_esatti_robusti']:.1f}",
+                    s["esatti"], f"{s['pct_esatti']:.1f}", f"{s['f1_medio']:.1f}", s["non_verificabili"], s["robustezza_mancante"],
+                    s["casi_risolti_almeno_una_volta"], s["casi_risolti_sempre"], s["casi_totali"]]
+            for e in ESITI:
+                riga.append(s["esiti"][e])
+            riga += [fmt_tempo(s["tempo_mediano_s"]), fmt_tempo(s["tempo_q1_s"]), fmt_tempo(s["tempo_q3_s"]),
+                     s["demo_esatti_robusti"], s["demo_esatti"], s["demo_run"], f"{s['demo_f1_medio']:.1f}"]
+            w.writerow(riga)
 
     with open(os.path.join(CARTELLA_USCITA, "dettaglio_casi.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["caso", "modello", "prove", "risultati_corretti", "corretti_senza_copiature", "correttezza_parziale"])
         for caso in [ID_DEMO] + ordine_casi(casi_bird):
             for modello in MODELLI:
-                run = [r for r in risultati if r["modello"] == modello and r["caso"] == caso]
+                run = prove_di(risultati, modello, caso)
                 if run:
-                    w.writerow([caso, NOMI_MODELLI.get(modello, modello), len(run),
-                                sum(1 for r in run if esito(r) == "esatto"), sum(1 for r in run if esatto_robusto(r)),
-                                f"{100 * statistics.mean(f1(r) for r in run):.1f}"])
+                    esatti = 0
+                    robusti = 0
+                    valori_f1 = []
+                    for r in run:
+                        if esito(r) == "esatto":
+                            esatti += 1
+                        if esatto_robusto(r):
+                            robusti += 1
+                        valori_f1.append(f1(r))
+                    w.writerow([caso, NOMI_MODELLI.get(modello, modello), len(run), esatti, robusti,
+                                f"{100 * statistics.mean(valori_f1):.1f}"])
 
     righe = [
         "# Classifica del benchmark",
@@ -265,13 +387,21 @@ def scrivi_tabelle(stats, risultati, casi_bird):
     for s in stats:
         righe.append(f"| {s['nome']} | {s['demo_esatti_robusti']}/{s['demo_run']} | {s['demo_esatti']}/{s['demo_run']} | "
                      f"{pct(s['demo_f1_medio'])} |")
-    mancanti = sum(s["robustezza_mancante"] for s in stats)
+    mancanti = prove_senza_controllo(stats)
     if mancanti:
         righe += ["", f"**Attenzione**: {mancanti} prove con risultato corretto non hanno ancora il controllo sulle "
-                      "copiature (eseguire `python controllo_copiatura.py`): nel frattempo non contano come corrette "
-                      "senza copiature."]
+                      "copiature (eseguire `python versione_originale/controllo_copiatura.py`): nel frattempo non "
+                      "contano come corrette senza copiature."]
     with open(os.path.join(CARTELLA_USCITA, "classifica.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(righe) + "\n")
+
+
+def prove_senza_controllo(stats):
+    """Quante prove corrette non hanno ancora il controllo sulle copiature."""
+    mancanti = 0
+    for s in stats:
+        mancanti += s["robustezza_mancante"]
+    return mancanti
 
 
 # -- primitive grafiche -------------------------------------------------------------
@@ -299,9 +429,14 @@ def barra(ax, x0, x1, y, altezza, colore, px, arrotonda=True, raggio_px=4):
     """Barra orizzontale: estremo dei dati arrotondato di 4px, base squadrata."""
     if x1 - x0 <= 0:
         return
-    rx = min(raggio_px / px[0], x1 - x0) if arrotonda else 0
-    ry = min(raggio_px / px[1], altezza / 2) if arrotonda else 0
-    basso, alto = y - altezza / 2, y + altezza / 2
+    if arrotonda:
+        rx = min(raggio_px / px[0], x1 - x0)
+        ry = min(raggio_px / px[1], altezza / 2)
+    else:
+        rx = 0
+        ry = 0
+    basso = y - altezza / 2
+    alto = y + altezza / 2
     vertici = [(x0, basso), (x1 - rx, basso), (x1, basso), (x1, basso + ry),
                (x1, alto - ry), (x1, alto), (x1 - rx, alto), (x0, alto), (x0, basso)]
     codici = [Path.MOVETO, Path.LINETO, Path.CURVE3, Path.CURVE3,
@@ -322,14 +457,28 @@ def margine_alto(fig, pollici):
 
 
 def fmt_durata(s):
-    return f"{s:.0f} s" if s < 120 else f"{s / 60:.1f} min".replace(".", ",")
+    if s < 120:
+        return f"{s:.0f} s"
+    return f"{s / 60:.1f} min".replace(".", ",")
 
 
 def sottotitolo_copertura(stats):
-    valutati = sum(s["run_valutati"] for s in stats)
-    previsti = sum(s["run_previsti"] for s in stats)
-    parziale = "" if valutati >= previsti else f" · DATI PARZIALI: {valutati}/{previsti} prove"
+    valutati = 0
+    previsti = 0
+    for s in stats:
+        valutati += s["run_valutati"]
+        previsti += s["run_previsti"]
+    parziale = ""
+    if valutati < previsti:
+        parziale = f" · DATI PARZIALI: {valutati}/{previsti} prove"
     return f"{stats[0]['casi_totali']} casi BIRD, {descrizione_run()}{parziale}"
+
+
+def nomi_dei_modelli(stats):
+    nomi = []
+    for s in stats:
+        nomi.append(s["nome"])
+    return nomi
 
 
 # -- figure -----------------------------------------------------------------------------
@@ -341,7 +490,7 @@ def figura_classifica(stats):
     stile_assi(ax)
     ax.set_xlim(0, 100)
     ax.set_ylim(n - 0.5, -0.5)
-    ax.set_yticks(range(n), [s["nome"] for s in stats])
+    ax.set_yticks(range(n), nomi_dei_modelli(stats))
     ax.set_xticks([0, 25, 50, 75, 100], ["0%", "25%", "50%", "75%", "100%"])
     px = scala_px(ax)
     h = min(0.26, 18 / px[1])
@@ -351,11 +500,15 @@ def figura_classifica(stats):
              (MISURA_SENZA_COPIATURE, "pct_esatti_robusti", COLORI_CATEGORICI[2]),
              (MISURA_PARZIALE, "f1_medio", COLORI_CATEGORICI[1])]
     for i, s in enumerate(stats):
-        for k, (_, chiave, colore) in enumerate(serie):
+        for k in range(len(serie)):
+            etichetta, chiave, colore = serie[k]
             y = i + (k - (len(serie) - 1) / 2) * (h + gap)
             barra(ax, 0, s[chiave], y, h, colore, px)
             ax.text(s[chiave] + 1.2, y, f"{s[chiave]:.0f}%", va="center", fontsize=8.5, color=INCHIOSTRO_SECONDARIO)
-    ax.legend(handles=[Patch(color=c, label=l) for l, _, c in serie], loc="lower left", bbox_to_anchor=(0, 1.0),
+    legenda = []
+    for etichetta, chiave, colore in serie:
+        legenda.append(Patch(color=colore, label=etichetta))
+    ax.legend(handles=legenda, loc="lower left", bbox_to_anchor=(0, 1.0),
               ncol=3, frameon=False, fontsize=9, handlelength=1, handleheight=1)
     titolo(fig, "Classifica dei modelli", sottotitolo_copertura(stats))
     fig.savefig(os.path.join(CARTELLA_USCITA, "fig_classifica.png"), dpi=200)
@@ -369,7 +522,7 @@ def figura_esiti(stats):
     stile_assi(ax)
     ax.set_xlim(0, 100)
     ax.set_ylim(n - 0.5, -0.5)
-    ax.set_yticks(range(n), [s["nome"] for s in stats])
+    ax.set_yticks(range(n), nomi_dei_modelli(stats))
     ax.set_xticks([0, 25, 50, 75, 100], ["0%", "25%", "50%", "75%", "100%"])
     px = scala_px(ax)
     h = min(0.6, 24 / px[1])
@@ -378,14 +531,26 @@ def figura_esiti(stats):
         totale = s["run_valutati"]
         if not totale:
             continue
-        quote = [(e, 100 * s["esiti"][e] / totale) for e in ESITI if s["esiti"][e]]
+        # Le quote degli esiti presenti, una dopo l'altra sulla stessa barra.
+        quote = []
+        for e in ESITI:
+            if s["esiti"][e]:
+                quote.append((e, 100 * s["esiti"][e] / totale))
         inizio = 0.0
-        for j, (e, quota) in enumerate(quote):
+        for j in range(len(quote)):
+            e, quota = quote[j]
             ultimo = j == len(quote) - 1
             fine = inizio + quota
-            barra(ax, inizio, fine if ultimo else fine - gap, i, h, COLORI_CATEGORICI[ESITI.index(e)], px, arrotonda=ultimo)
+            if ultimo:
+                fine_disegnata = fine
+            else:
+                fine_disegnata = fine - gap  # 2px di spazio tra un pezzo e il successivo
+            barra(ax, inizio, fine_disegnata, i, h, COLORI_CATEGORICI[ESITI.index(e)], px, arrotonda=ultimo)
             inizio = fine
-    ax.legend(handles=[Patch(color=c, label=etichetta_esito(e)) for e, c in zip(ESITI, COLORI_CATEGORICI)], loc="lower left",
+    legenda = []
+    for numero, e in enumerate(ESITI):
+        legenda.append(Patch(color=COLORI_CATEGORICI[numero], label=etichetta_esito(e)))
+    ax.legend(handles=legenda, loc="lower left",
               bbox_to_anchor=(0, 1.0), ncol=3, frameon=False, fontsize=9, handlelength=1, handleheight=1)
     titolo(fig, "Esito delle prove per modello", sottotitolo_copertura(stats) + "\nquota sul totale delle prove valutate")
     fig.savefig(os.path.join(CARTELLA_USCITA, "fig_esiti.png"), dpi=200)
@@ -393,46 +558,84 @@ def figura_esiti(stats):
 
 
 def ordine_casi(casi_bird):
-    # Raggruppati per database, poi per id numerico della domanda BIRD.
-    def chiave(caso):
+    # Raggruppati per database, poi per id numerico della domanda BIRD (es. "1334_student_club").
+    chiavi = []
+    for caso in casi_bird:
         qid, db = caso.split("_", 1)
-        return db, int(qid)
-    return sorted(casi_bird, key=chiave)
+        chiavi.append((db, int(qid), caso))
+    chiavi.sort()
+    ordinati = []
+    for db, qid, caso in chiavi:
+        ordinati.append(caso)
+    return ordinati
 
 
 def gradino_esatti(esatti, run):
     """Indice nella rampa per la quota di run esatti: fino a 1/3, fino a 2/3, oltre (con 3 run: 1, 2, 3 esatti)."""
     quota = esatti / run
-    return 0 if quota <= 1 / 3 + 1e-9 else 1 if quota <= 2 / 3 + 1e-9 else 2
+    if quota <= 1 / 3 + 1e-9:
+        return 0
+    if quota <= 2 / 3 + 1e-9:
+        return 1
+    return 2
 
 
 def figura_casi(stats, risultati, casi_bird):
     casi = [ID_DEMO] + ordine_casi(casi_bird)
-    modelli = [s["modello"] for s in stats]
+    modelli = []
+    for s in stats:
+        modelli.append(s["modello"])
     fig, ax = plt.subplots(figsize=(7.2, 1.7 + 0.24 * len(casi)))
     fig.subplots_adjust(left=0.36, right=0.97, top=margine_alto(fig, 1.05), bottom=0.45 / fig.get_figheight())
     for riga, caso in enumerate(casi):
-        y = riga + (0 if caso == ID_DEMO else 0.5)  # spazio tra il demo e i casi BIRD
+        if caso == ID_DEMO:
+            y = riga
+        else:
+            y = riga + 0.5  # spazio tra il demo e i casi BIRD
         for col, modello in enumerate(modelli):
-            run = [r for r in risultati if r["modello"] == modello and r["caso"] == caso]
+            run = prove_di(risultati, modello, caso)
             if not run:
                 ax.add_patch(plt.Rectangle((col, y), 1, 1, facecolor=SUPERFICIE, edgecolor=SUPERFICIE, linewidth=2,
                                            hatch="////", hatchcolor=GRIGLIA))
                 continue
-            esatti = sum(1 for r in run if esito(r) == "esatto")
-            gradino = None if esatti == 0 else gradino_esatti(esatti, len(run))
-            colore = NEUTRO if gradino is None else RAMPA_ESATTI[gradino]
+            esatti = 0
+            for r in run:
+                if esito(r) == "esatto":
+                    esatti += 1
+            if esatti == 0:
+                gradino = None
+                colore = NEUTRO
+            else:
+                gradino = gradino_esatti(esatti, len(run))
+                colore = RAMPA_ESATTI[gradino]
             ax.add_patch(plt.Rectangle((col, y), 1, 1, facecolor=colore, edgecolor=SUPERFICIE, linewidth=2))
             # Il conteggio in ogni cella: il colore da solo non distingue 2/3 da 5/8.
-            inchiostro = SUPERFICIE if gradino == 2 else (TENUE if gradino is None else INCHIOSTRO)
+            if gradino == 2:
+                inchiostro = SUPERFICIE
+            elif gradino is None:
+                inchiostro = TENUE
+            else:
+                inchiostro = INCHIOSTRO
             ax.text(col + 0.5, y + 0.5, f"{esatti}/{len(run)}", ha="center", va="center", fontsize=6.5, color=inchiostro)
     ax.set_xlim(0, len(modelli))
     ax.set_ylim(len(casi) + 0.5, 0)
-    ax.set_xticks([c + 0.5 for c in range(len(modelli))], [NOMI_BREVI.get(m, m) for m in modelli], fontsize=8,
-                  color=INCHIOSTRO_SECONDARIO)
+    posizioni_x = []
+    nomi_brevi = []
+    for c in range(len(modelli)):
+        posizioni_x.append(c + 0.5)
+        nomi_brevi.append(NOMI_BREVI.get(modelli[c], modelli[c]))
+    ax.set_xticks(posizioni_x, nomi_brevi, fontsize=8, color=INCHIOSTRO_SECONDARIO)
     ax.xaxis.tick_top()
-    etichette = [("demo · " + ID_DEMO) if c == ID_DEMO else c.replace("_", " · ", 1) for c in casi]
-    ax.set_yticks([r + 0.5 + (0 if c == ID_DEMO else 0.5) for r, c in enumerate(casi)], etichette, fontsize=7.5)
+    posizioni_y = []
+    etichette = []
+    for r, c in enumerate(casi):
+        if c == ID_DEMO:
+            posizioni_y.append(r + 0.5)
+            etichette.append("demo · " + ID_DEMO)
+        else:
+            posizioni_y.append(r + 0.5 + 0.5)
+            etichette.append(c.replace("_", " · ", 1))
+    ax.set_yticks(posizioni_y, etichette, fontsize=7.5)
     for lato in ax.spines.values():
         lato.set_visible(False)
     ax.tick_params(length=0)
@@ -449,20 +652,34 @@ def figura_casi(stats, risultati, casi_bird):
 
 
 def figura_tempi(stats):
-    validi = [s for s in stats if s["tempo_mediano_s"]]
+    validi = []
+    for s in stats:
+        if s["tempo_mediano_s"]:
+            validi.append(s)
     n = len(validi)
     fig, ax = plt.subplots(figsize=(8, 1.4 + 0.55 * n))
     fig.subplots_adjust(left=0.30, right=0.93, top=margine_alto(fig, 1.05), bottom=0.40 / fig.get_figheight())
     stile_assi(ax)
     ax.set_xscale("log")
-    minimo = min(s["tempo_q1_s"] for s in validi)
-    massimo = max(s["tempo_q3_s"] for s in validi)
+    primi_quartili = []
+    terzi_quartili = []
+    for s in validi:
+        primi_quartili.append(s["tempo_q1_s"])
+        terzi_quartili.append(s["tempo_q3_s"])
+    minimo = min(primi_quartili)
+    massimo = max(terzi_quartili)
     ax.set_xlim(max(0.5, minimo / 2), massimo * 4)
     ax.set_ylim(n - 0.5, -0.5)
-    ax.set_yticks(range(n), [s["nome"] for s in validi])
+    ax.set_yticks(range(n), nomi_dei_modelli(validi))
     etichette_tick = {1: "1 s", 10: "10 s", 60: "1 min", 600: "10 min", 3600: "1 ora"}
-    tick = [t for t in etichette_tick if ax.get_xlim()[0] <= t <= ax.get_xlim()[1]]
-    ax.set_xticks(tick, [etichette_tick[t] for t in tick])
+    limite_sinistro, limite_destro = ax.get_xlim()
+    tick = []
+    etichette = []
+    for t in etichette_tick:
+        if t >= limite_sinistro and t <= limite_destro:
+            tick.append(t)
+            etichette.append(etichette_tick[t])
+    ax.set_xticks(tick, etichette)
     ax.minorticks_off()
     for i, s in enumerate(validi):
         ax.plot([s["tempo_q1_s"], s["tempo_q3_s"]], [i, i], color=COLORI_CATEGORICI[0], linewidth=2,
@@ -479,9 +696,15 @@ def figura_tempi(stats):
 
 def main():
     os.makedirs(CARTELLA_USCITA, exist_ok=True)
-    casi_bird = [id_caso(p) for p in elenco_casi() if id_caso(p) != ID_DEMO]
+    casi_bird = []
+    for percorso in elenco_casi():
+        if id_caso(percorso) != ID_DEMO:
+            casi_bird.append(id_caso(percorso))
     # Solo i run previsti per ciascun modello: eventuali run in piu' non sbilanciano i casi.
-    risultati = [r for r in carica_risultati() if r["modello"] in MODELLI and r["run"] <= n_run(r["modello"])]
+    risultati = []
+    for r in carica_risultati():
+        if r["modello"] in MODELLI and r["run"] <= n_run(r["modello"]):
+            risultati.append(r)
     stats = statistiche(risultati, casi_bird)
     scrivi_tabelle(stats, risultati, casi_bird)
     figura_classifica(stats)
@@ -491,9 +714,10 @@ def main():
     for i, s in enumerate(stats, 1):
         print(f"{i}. {s['nome']}: {s['esatti_robusti']} corretti senza copiature, {s['esatti']} corretti "
               f"su {s['run_valutati']} prove, correttezza parziale {s['f1_medio']:.1f}%")
-    mancanti = sum(s["robustezza_mancante"] for s in stats)
+    mancanti = prove_senza_controllo(stats)
     if mancanti:
-        print(f"ATTENZIONE: {mancanti} prove corrette senza controllo sulle copiature: eseguire python controllo_copiatura.py")
+        print(f"ATTENZIONE: {mancanti} prove corrette senza controllo sulle copiature: "
+              f"eseguire python versione_originale/controllo_copiatura.py")
     print(f"Tabelle e figure salvate in {CARTELLA_USCITA}/")
 
 

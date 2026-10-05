@@ -1,3 +1,12 @@
+"""Prende da BIRD Mini-Dev i 30 casi del benchmark e li salva in casi_BIRD/, un file .sqlite per caso.
+
+Ogni file contiene le tabelle di partenza (copiate dal database BIRD), la tabella finale RISULTATO_ATTESO
+(il risultato della query vera di BIRD) e due tabelle di informazioni: _caso_info (i nomi delle tabelle) e
+_bird_info (domanda, difficolta' e query vera).
+
+Come si usa (dalla cartella principale della repository, con BIRD Mini-Dev in bird-mini-dev/):
+  python versione_originale/estrazione_casi_BIRD.py
+"""
 import json
 import os
 import random
@@ -23,10 +32,14 @@ NOME_TABELLA_TARGET = "RISULTATO_ATTESO"
 
 def tabelle_del_db(cursor):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-    return [riga[0] for riga in cursor.fetchall()]
+    nomi = []
+    for riga in cursor.fetchall():
+        nomi.append(riga[0])
+    return nomi
 
 
 def tabelle_referenziate(sql, nomi_tabelle):
+    """Le tabelle del database che compaiono nella query."""
     trovate = []
     for nome in nomi_tabelle:
         if re.search(r'\b' + re.escape(nome) + r'\b', sql, flags=re.IGNORECASE):
@@ -47,10 +60,14 @@ def copia_tabella(cursor_origine, cursor_destinazione, nome_tabella):
 
 
 def crea_tabella_target(cursor_destinazione, colonne, righe):
+    # Una colonna senza nome diventa col_0, col_1...; due colonne con lo stesso nome diventano nome, nome_1...
     nomi_colonna_sicuri = []
     usati = set()
     for i, nome in enumerate(colonne):
-        nome_sicuro = nome if nome else f"col_{i}"
+        if nome:
+            nome_sicuro = nome
+        else:
+            nome_sicuro = f"col_{i}"
         base = nome_sicuro
         contatore = 1
         while nome_sicuro in usati:
@@ -59,14 +76,18 @@ def crea_tabella_target(cursor_destinazione, colonne, righe):
         usati.add(nome_sicuro)
         nomi_colonna_sicuri.append(nome_sicuro)
 
-    colonne_ddl = ", ".join(f'"{nome}"' for nome in nomi_colonna_sicuri)
+    tra_virgolette = []
+    for nome in nomi_colonna_sicuri:
+        tra_virgolette.append(f'"{nome}"')
+    colonne_ddl = ", ".join(tra_virgolette)
     cursor_destinazione.execute(f'CREATE TABLE {NOME_TABELLA_TARGET} ({colonne_ddl})')
     if righe:
         placeholders = ",".join(["?"] * len(nomi_colonna_sicuri))
         cursor_destinazione.executemany(f'INSERT INTO {NOME_TABELLA_TARGET} VALUES ({placeholders})', righe)
 
 
-def estrai_caso(esempio, nomi_sorgente):
+def estrai_caso(esempio, nomi_sorgente, cartella_uscita):
+    """Crea il file .sqlite del caso nella cartella indicata e restituisce il suo percorso."""
     db_id = esempio["db_id"]
     percorso_db_origine = os.path.join(CARTELLA_DB, db_id, f"{db_id}.sqlite")
 
@@ -74,12 +95,14 @@ def estrai_caso(esempio, nomi_sorgente):
     cursor_origine = conn_origine.cursor()
 
     cursor_origine.execute(esempio["SQL"])
-    colonne = [d[0] for d in cursor_origine.description]
+    colonne = []
+    for descrizione in cursor_origine.description:
+        colonne.append(descrizione[0])
     righe_target = cursor_origine.fetchall()
 
-    os.makedirs(CARTELLA_CASI_OUT, exist_ok=True)
+    os.makedirs(cartella_uscita, exist_ok=True)
     nome_file = f"{esempio['question_id']}_{db_id}.sqlite"
-    percorso_out = os.path.join(CARTELLA_CASI_OUT, nome_file)
+    percorso_out = os.path.join(cartella_uscita, nome_file)
     if os.path.exists(percorso_out):
         os.remove(percorso_out)
 
@@ -109,13 +132,24 @@ def estrai_caso(esempio, nomi_sorgente):
 
 
 def esegui_con_timeout(conn, sql):
+    """Esegue la query e restituisce (nomi delle colonne, righe); si ferma dopo TIMEOUT_QUERY_SECONDI."""
     inizio = time.time()
-    conn.set_progress_handler(lambda: 1 if time.time() - inizio > TIMEOUT_QUERY_SECONDI else 0, 100000)
+
+    def troppo_tempo():
+        # SQLite chiama questa funzione ogni tanto mentre lavora: se restituisce 1, la query si ferma.
+        if time.time() - inizio > TIMEOUT_QUERY_SECONDI:
+            return 1
+        return 0
+
+    conn.set_progress_handler(troppo_tempo, 100000)
     try:
         cursor = conn.cursor()
         cursor.execute(sql)
         righe = cursor.fetchall()
-        return [d[0] for d in cursor.description], righe
+        colonne = []
+        for descrizione in cursor.description:
+            colonne.append(descrizione[0])
+        return colonne, righe
     finally:
         conn.set_progress_handler(None, 0)
 
@@ -127,8 +161,9 @@ def stima_token_prompt(cursor, nomi_sorgente, colonne, righe):
     return len(costruisci_prompt(schema_a, schema_b, NOME_TABELLA_TARGET)) // 4
 
 
-def filtra_candidati(tutti_esempi):
-    """Esempi 'simple', con al massimo 2 tabelle, prompt piccolo e risultato non ridotto a un singolo valore.
+def filtra_candidati(tutti_esempi, difficolta, max_token_prompt):
+    """Esempi della difficolta' indicata, con al massimo 2 tabelle, prompt piccolo e risultato non ridotto a un
+    singolo valore. Con max_token_prompt = None la lunghezza del prompt non conta.
 
     Un risultato di 1 riga x 1 colonna (un conteggio, una percentuale) non permette di risalire
     alla trasformazione: infinite query diverse danno lo stesso numero.
@@ -137,7 +172,7 @@ def filtra_candidati(tutti_esempi):
     tabelle_per_db = {}
     candidati = []
     for esempio in tutti_esempi:
-        if esempio["difficulty"] != DIFFICOLTA:
+        if esempio["difficulty"] != difficolta:
             continue
         db_id = esempio["db_id"]
         if db_id not in connessioni:
@@ -146,7 +181,7 @@ def filtra_candidati(tutti_esempi):
         conn = connessioni[db_id]
 
         nomi_sorgente = tabelle_referenziate(esempio["SQL"], tabelle_per_db[db_id])
-        if not 1 <= len(nomi_sorgente) <= MAX_TABELLE_SORGENTE:
+        if len(nomi_sorgente) < 1 or len(nomi_sorgente) > MAX_TABELLE_SORGENTE:
             continue
         try:
             colonne, righe = esegui_con_timeout(conn, esempio["SQL"])
@@ -154,9 +189,11 @@ def filtra_candidati(tutti_esempi):
             continue
         if not righe or (len(righe) == 1 and len(colonne) == 1):
             continue
-        token = stima_token_prompt(conn.cursor(), nomi_sorgente, colonne, righe)
-        if token > MAX_TOKEN_PROMPT:
-            continue
+        token = None
+        if max_token_prompt is not None:
+            token = stima_token_prompt(conn.cursor(), nomi_sorgente, colonne, righe)
+            if token > max_token_prompt:
+                continue
         candidati.append({"esempio": esempio, "tabelle": nomi_sorgente, "righe": len(righe), "token": token})
 
     for conn in connessioni.values():
@@ -164,11 +201,29 @@ def filtra_candidati(tutti_esempi):
     return candidati
 
 
+def ordina_per_numero_di_domanda(candidati):
+    coppie = []
+    for posizione, candidato in enumerate(candidati):
+        coppie.append((candidato["esempio"]["question_id"], posizione))
+    coppie.sort()
+    ordinati = []
+    for numero, posizione in coppie:
+        ordinati.append(candidati[posizione])
+    return ordinati
+
+
 def seleziona(candidati):
     # Prima tutti i casi con risultato di piu' righe (i piu' deducibili), poi si completa
     # con casi a una riga ma piu' colonne, scelti a caso con seed fisso.
-    multi_riga = sorted((c for c in candidati if c["righe"] >= 2), key=lambda c: c["esempio"]["question_id"])
-    una_riga = sorted((c for c in candidati if c["righe"] == 1), key=lambda c: c["esempio"]["question_id"])
+    multi_riga = []
+    una_riga = []
+    for candidato in candidati:
+        if candidato["righe"] >= 2:
+            multi_riga.append(candidato)
+        elif candidato["righe"] == 1:
+            una_riga.append(candidato)
+    multi_riga = ordina_per_numero_di_domanda(multi_riga)
+    una_riga = ordina_per_numero_di_domanda(una_riga)
     random.seed(SEED)
     random.shuffle(multi_riga)
     random.shuffle(una_riga)
@@ -179,16 +234,20 @@ def main():
     with open(PERCORSO_JSON, encoding="utf-8") as f:
         tutti_esempi = json.load(f)
 
-    candidati = filtra_candidati(tutti_esempi)
-    n_multi = sum(1 for c in candidati if c["righe"] >= 2)
+    candidati = filtra_candidati(tutti_esempi, DIFFICOLTA, MAX_TOKEN_PROMPT)
+    n_multi = 0
+    for candidato in candidati:
+        if candidato["righe"] >= 2:
+            n_multi += 1
     print(f"Candidati: {len(candidati)} ({n_multi} con risultato di piu' righe, {len(candidati) - n_multi} a una riga e piu' colonne)")
 
     riusciti = []
     falliti = []
     for c in seleziona(candidati):
-        esempio, nomi_sorgente = c["esempio"], c["tabelle"]
+        esempio = c["esempio"]
+        nomi_sorgente = c["tabelle"]
         try:
-            percorso_out = estrai_caso(esempio, nomi_sorgente)
+            percorso_out = estrai_caso(esempio, nomi_sorgente, CARTELLA_CASI_OUT)
             riusciti.append({
                 "question_id": esempio["question_id"],
                 "db_id": esempio["db_id"],

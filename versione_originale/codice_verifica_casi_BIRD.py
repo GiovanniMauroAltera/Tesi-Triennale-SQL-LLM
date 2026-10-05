@@ -1,3 +1,8 @@
+"""Controlla i casi estratti da BIRD: la query vera di ogni caso deve riprodurre esattamente la sua tabella finale.
+
+Come si usa (dalla cartella principale della repository):
+  python versione_originale/codice_verifica_casi_BIRD.py
+"""
 import json
 import os
 import sys
@@ -22,7 +27,10 @@ for voce in manifest["riusciti"]:
     tabelle_create = esegui_e_stampa(cursor, query_verifica)
     risultato = valuta_accuratezza(cursor, tabelle_create, nome_target)
 
-    stato = "OK" if risultato["esatto"] else "FALLITO"
+    if risultato["esatto"]:
+        stato = "OK"
+    else:
+        stato = "FALLITO"
     print(f"[{stato}] {voce['question_id']} ({voce['db_id']}): esatto={risultato['esatto']} F1={risultato['f1']*100:.1f}% errore={risultato['errore']}")
     if not risultato["esatto"]:
         falliti.append(voce)
@@ -31,4 +39,7 @@ for voce in manifest["riusciti"]:
 
 print(f"\n{len(manifest['riusciti']) - len(falliti)}/{len(manifest['riusciti'])} casi verificati correttamente.")
 if falliti:
-    print("Casi falliti:", [v["question_id"] for v in falliti])
+    numeri = []
+    for voce in falliti:
+        numeri.append(voce["question_id"])
+    print("Casi falliti:", numeri)

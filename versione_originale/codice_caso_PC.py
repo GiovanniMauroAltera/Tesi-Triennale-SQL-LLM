@@ -1,3 +1,9 @@
+"""Crea il caso dei PC (caso_PC/pc_multivaluta.sqlite): i prezzi di vendita in tre valute e la tabella finale
+con il prezzo medio in dollari, calcolato con tassi di cambio che non compaiono da nessuna parte.
+
+Come si usa (dalla cartella principale della repository):
+  python versione_originale/codice_caso_PC.py
+"""
 import os
 import sqlite3
 
