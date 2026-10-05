@@ -1,0 +1,2 @@
+# prove.csv contiene le query dei modelli con i loro "a capo": git non deve cambiarli.
+grafici/prove.csv -text
