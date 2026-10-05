@@ -32,26 +32,26 @@ Percentuali sui 30 casi BIRD:
 | Senza modelli | - | 86,7% | 60,0% | 0,1 s |
 | Misto | Gemma | 86,7% | 63,3% | 69 s |
 | Misto | Nemotron | 86,7% | 63,3% | 30 s |
-| Misto | gpt-oss | 81,9% | 62,7% | 4 s |
-| Misto | Qwen3 4B | 83,3% | 51,1% | 18 s |
+| Misto | gpt-oss | 82,2% | 61,1% | 4 s |
+| Misto | Qwen3 4B | 83,3% | 51,7% | 18 s |
 
 Con tutti i modelli insieme (come funziona davvero il programma), il metodo misto risolve onestamente 26 casi su 30 (20 con la stessa regola della query vera) e la prima risposta valida arriva di solito in circa 3 secondi. Con i soli indizi i casi sono 15 (10); nel benchmark originale, mettendo insieme tutti i modelli e tutte le prove ripetute, erano 10 (5).
 
-Per gpt-oss e Qwen3 il metodo misto è stato ripetuto più volte (3 prove per caso, ma la terza di gpt-oss è a 22 casi su 30 per i limiti di Groq): i risultati cambiano pochissimo da una prova all'altra. Gemma con gli indizi è misurata su 27 casi, perché su tre casi i server di Google vanno sempre in errore.
+Il metodo misto è stato ripetuto più volte: 3 prove per caso con gpt-oss e 4 con i modelli sul mio computer. I risultati cambiano pochissimo da una prova all'altra. Gemma con gli indizi è misurata su 27 casi, perché su tre casi i server di Google vanno sempre in errore.
 
 Il caso dei PC (prezzi in valute diverse da convertire in dollari) è quello originale della tesi e richiede di dedurre i tassi di cambio. Il metodo senza modelli non lo risolve, perché servono calcoli. Lo risolvono Gemma con gli indizi, Nemotron con gli indizi e Gemma con il metodo misto, trovando i tassi esatti (1,08, 1,25 e 0,0065). Nel benchmark ci era riuscita solo Gemma, in 1 prova su 8.
 
 ### I modelli sul mio computer
 
-Con il metodo misto ho provato anche i modelli locali (una prova per caso, tre per Qwen3 4B e Llama). "Scritte dal modello" sono le query giuste scritte dal modello stesso, senza contare quelle in cui ha sbagliato ed è rimasta la query del programma.
+Con il metodo misto ho provato anche i modelli locali, con 4 prove per caso ciascuno. "Scritte dal modello" sono le query giuste scritte dal modello stesso (in media per prova), senza contare quelle in cui ha sbagliato ed è rimasta la query del programma.
 
 | Modello | Dimensione | Onesti | Scritte dal modello | Stessa regola della query vera | Tempo mediano |
 |---|---|---|---|---|---|
-| Qwen3.5 9B | 6,6 GB | 86,7% | 24 su 30 | 56,7% | 40 s |
-| Qwen3 4B | 2,5 GB | 83,3% | 21 su 30 | 51,1% | 18 s |
-| Llama 3.1 8B | 4,9 GB | 83,3% | 12 su 30 | 55,6% | 29 s |
-| Qwen2.5-coder 7B | 4,7 GB | 80,0% | 22 su 30 | 56,7% | 27 s |
-| Qwen3.5 4B | 3,4 GB | 76,7% | 20 su 30 | 53,3% | 25 s |
+| Qwen3.5 9B | 6,6 GB | 85,0% | 23,8 su 30 | 56,7% | 40 s |
+| Qwen3 4B | 2,5 GB | 83,3% | 21,5 su 30 | 51,7% | 18 s |
+| Llama 3.1 8B | 4,9 GB | 83,3% | 12,8 su 30 | 55,0% | 29 s |
+| Qwen3.5 4B | 3,4 GB | 78,3% | 19,5 su 30 | 55,0% | 25 s |
+| Qwen2.5-coder 7B | 4,7 GB | 77,5% | 22,0 su 30 | 54,2% | 26 s |
 
 Nel benchmark Llama aveva lo 0,7% di risposte oneste in 141 secondi e Qwen2.5-coder il 2,5% in 40 secondi. Il migliore in locale è Qwen3.5 9B, che scrive da solo quasi quanto i modelli grandi online ma è più lento; Qwen3 4B è il compromesso migliore tra velocità e risultati. Llama sbaglia spesso perché allarga il filtro che gli propone il programma invece di usarlo com'è. Nessun modello locale risolve il caso dei PC.
 
