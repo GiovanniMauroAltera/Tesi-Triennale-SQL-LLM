@@ -206,7 +206,7 @@ def confronta(righe_ottenute, righe_attese, totale_ottenute=None):
             mancanti.append(riga)
     rimaste = []  # le righe ottenute non ancora abbinate
     for riga, quante in disponibili.items():
-        for _ in range(quante):
+        for volta in range(quante):
             rimaste.append(riga)
 
     # Per le righe attese che mancano, una riga rimasta uguale a meno della tolleranza sui numeri.
@@ -276,10 +276,10 @@ def valori_copiati(sql, righe_finali):
 
 def verifica(conn, tabella_finale, sql):
     """Esegue la query del modello su una copia del database e dice se riproduce la tabella finale."""
-    _, righe_finali = leggi_righe(conn, nome_sql(tabella_finale))
+    colonne_finali, righe_finali = leggi_righe(conn, nome_sql(tabella_finale))
     copia = copia_per_il_modello(conn, tabella_finale)
     try:
-        _, righe, totale = esegui(copia, sql)
+        colonne, righe, totale = esegui(copia, sql)
         esito = confronta(righe, righe_finali, totale)
     except ValueError as errore:
         esito = esito_fallito(str(errore))

@@ -10,7 +10,6 @@ MAX_RIGHE_FINALE = 10        # righe della tabella finale mostrate (piu' il nume
 MAX_CARATTERI_VALORE = 60    # i testi lunghi vengono accorciati: costano token senza aiutare
 
 # Indizi dai dati: le righe di partenza che contengono i valori della tabella finale.
-INDIZI = True
 MAX_RIGHE_INDIZIO = 8        # righe mostrate per ogni tabella
 MAX_RIGHE_PER_VALORE = 5     # un valore che compare in piu' righe di cosi' non indica nulla (es. 1, 'Yes')
 MAX_RIGHE_FINALI_CERCATE = 20  # per gli indizi bastano alcune righe finali (il caso 532 ne ha 4430)
@@ -120,7 +119,7 @@ def descrivi_indizi(conn, tabelle_di_partenza, tabella_finale):
     noi (es. i 3 soci della tabella finale e, collegate dal loro CAP, le righe dei CAP con lo stato).
     Usa solo dati che nell'uso reale ci sono sempre: le tabelle di partenza e la tabella finale.
     """
-    _, righe_finali = leggi_righe(conn, nome_sql(tabella_finale), MAX_RIGHE_FINALI_CERCATE)
+    colonne_finali, righe_finali = leggi_righe(conn, nome_sql(tabella_finale), MAX_RIGHE_FINALI_CERCATE)
     valori_per_riga = []  # per ogni riga finale, i suoi valori utili
     for riga in righe_finali:
         valori = set()
@@ -202,7 +201,7 @@ def descrivi_indizi(conn, tabelle_di_partenza, tabella_finale):
 
 def descrivi_tabella_finale(conn, tabella):
     totale = conn.execute(f"SELECT COUNT(*) FROM {nome_sql(tabella)}").fetchone()[0]
-    _, righe = leggi_righe(conn, nome_sql(tabella), MAX_RIGHE_FINALE)
+    colonne, righe = leggi_righe(conn, nome_sql(tabella), MAX_RIGHE_FINALE)
     if totale <= MAX_RIGHE_FINALE:
         quante = "tutte"
     else:
@@ -210,14 +209,14 @@ def descrivi_tabella_finale(conn, tabella):
     return "\n".join([f"{sql_di_creazione(conn, tabella)};", f"-- {totale} righe, {quante}:", righe_come_testo(righe)])
 
 
-def messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale, suggerimenti=""):
+def messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale, suggerimenti):
     """La conversazione da mandare al modello: l'istruzione di sistema e il prompt."""
     return [{"role": "system", "content": ISTRUZIONE_DI_SISTEMA},
             {"role": "user", "content": prompt_iniziale(conn, tabelle_di_partenza, tabella_finale, suggerimenti)}]
 
 
-def prompt_iniziale(conn, tabelle_di_partenza, tabella_finale, suggerimenti=""):
-    """`suggerimenti`: testo in piu' del metodo misto (le query trovate dal programma), vuoto di base."""
+def prompt_iniziale(conn, tabelle_di_partenza, tabella_finale, suggerimenti):
+    """`suggerimenti`: le query trovate dal programma (ricerca_filtri.py), scritte da versione_ottimizzata.py."""
     descrizioni = []
     for tabella in tabelle_di_partenza:
         descrizioni.append(descrivi_tabella_di_partenza(conn, tabella))
@@ -225,12 +224,11 @@ def prompt_iniziale(conn, tabelle_di_partenza, tabella_finale, suggerimenti=""):
     stato_b = descrivi_tabella_finale(conn, tabella_finale)
 
     sezione_indizi = ""
-    if INDIZI:
-        indizi = descrivi_indizi(conn, tabelle_di_partenza, tabella_finale)
-        if indizi:
-            sezione_indizi = ("\nINDIZI - righe delle tabelle di partenza da cui probabilmente nasce lo STATO B "
-                              "(cercale con un filtro: cosa hanno in comune che le altre righe non hanno?)\n"
-                              f"{indizi}\n")
+    indizi = descrivi_indizi(conn, tabelle_di_partenza, tabella_finale)
+    if indizi:
+        sezione_indizi = ("\nINDIZI - righe delle tabelle di partenza da cui probabilmente nasce lo STATO B "
+                          "(cercale con un filtro: cosa hanno in comune che le altre righe non hanno?)\n"
+                          f"{indizi}\n")
     if suggerimenti:
         sezione_indizi += f"\nSUGGERIMENTI DEL PROGRAMMA\n{suggerimenti}\n"
 

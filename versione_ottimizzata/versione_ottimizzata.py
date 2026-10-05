@@ -1,28 +1,30 @@
-"""Metodo D misto: prima un programma cerca i filtri possibili, poi il modello sceglie quello sensato.
+"""Versione ottimizzata: prima un programma cerca i filtri possibili, poi i modelli scelgono quello sensato.
 
-1. Il programma (codice_ricerca_noLLM.py) prova in pochi secondi migliaia di regole semplici e tiene
-   quelle che selezionano esattamente le righe da cui nasce la tabella finale.
-2. Il modello riceve il solito prompt con gli indizi piu' queste query, sceglie la regola che ha senso
-   e scrive la query completa, aggiungendo i calcoli se servono. La query viene verificata e, se e'
-   sbagliata, il modello puo' correggerla come nel codice principale.
-3. Se il modello non ci riesce, resta la query del programma (se ne ha trovata una completa).
+1. Il programma (ricerca_filtri.py) prova in pochi secondi migliaia di regole semplici e tiene quelle
+   che selezionano esattamente le righe da cui nasce la tabella finale.
+2. I modelli (modelli_in_parallelo.py) ricevono la descrizione delle tabelle, gli indizi presi dai dati
+   (prompt.py) e queste query; scelgono la regola che ha senso e scrivono la query completa, aggiungendo
+   i calcoli se servono. Ogni query viene verificata (verifica.py) e, se e' sbagliata, il modello riceve
+   una spiegazione e puo' correggerla. Vince la prima query verificata.
+3. Se nessun modello ci riesce, resta la query del programma (se ne ha trovata una completa).
 
 Perche' insieme: il programma e' velocissimo ma non sa fare calcoli e a volte trova una regola che
 funziona per coincidenza (un intervallo di CAP al posto dello stato); il modello capisce il significato
 delle colonne, ma da solo spesso non trova il filtro giusto.
 
-Come si usa:
-  python codice_misto.py --caso casi_BIRD/1334_student_club.sqlite --modelli qwen3-4b
-  python codice_misto.py --database dati.sqlite --partenza A B --finale C
+Come si usa (dalla cartella principale della repository):
+  python versione_ottimizzata/versione_ottimizzata.py --caso casi_BIRD/1334_student_club.sqlite
+  python versione_ottimizzata/versione_ottimizzata.py --caso casi_BIRD/1334_student_club.sqlite --modelli qwen3-4b
+  python versione_ottimizzata/versione_ottimizzata.py --database dati.sqlite --partenza A B --finale C
 """
 import argparse
 import sys
 import time
 
-from codice_principale import CORREZIONI, accettabile, descrivi, ricostruisci
-from codice_ricerca_noLLM import cerca_filtri
 from modelli import MODELLI, MODELLI_DI_BASE
+from modelli_in_parallelo import CORREZIONI, accettabile, descrivi, ricostruisci
 from prompt import messaggi_iniziali
+from ricerca_filtri import cerca_filtri
 from verifica import apri_database, leggi_info_caso
 
 SECONDI_RICERCA = 60
@@ -52,17 +54,17 @@ def descrivi_suggerimenti(trovate):
 
 
 def ricostruisci_misto(conn, tabelle_di_partenza, tabella_finale, modelli, secondi_max, correzioni=CORREZIONI):
-    """Come ricostruisci() del codice principale, ma con i suggerimenti del programma nel prompt.
+    """Come ricostruisci() di modelli_in_parallelo.py, ma con i suggerimenti del programma nel prompt.
 
     Restituisce (migliore, proposte, trovate): `trovate` sono le query proposte dal programma.
     """
     inizio = time.time()
-    trovate, _ = cerca_filtri(conn, tabelle_di_partenza, tabella_finale, SECONDI_RICERCA, quanti=MAX_SUGGERIMENTI,
-                              solo_complete=False, per_livello=SUGGERIMENTI_PER_LIVELLO)
+    trovate, provate = cerca_filtri(conn, tabelle_di_partenza, tabella_finale, SECONDI_RICERCA,
+                                    quanti=MAX_SUGGERIMENTI, per_livello=SUGGERIMENTI_PER_LIVELLO)
     print(f"[{time.time() - inizio:5.0f} s] programma: {len(trovate)} regole che selezionano le righe giuste", flush=True)
     messaggi = messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale, descrivi_suggerimenti(trovate))
     rimasti = max(1, secondi_max - (time.time() - inizio))
-    migliore, proposte = ricostruisci(conn, tabelle_di_partenza, tabella_finale, modelli, rimasti, correzioni, messaggi)
+    migliore, proposte = ricostruisci(conn, tabella_finale, messaggi, modelli, rimasti, correzioni)
 
     # Il modello non ce l'ha fatta: resta la prima query del programma che riproduce la tabella finale.
     if migliore is None or not accettabile(migliore["esito"]):
@@ -75,7 +77,7 @@ def ricostruisci_misto(conn, tabelle_di_partenza, tabella_finale, modelli, secon
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Metodo misto: il programma propone i filtri, il modello sceglie e completa.")
+    parser = argparse.ArgumentParser(description="Versione ottimizzata: il programma propone i filtri, i modelli scelgono e completano.")
     parser.add_argument("--caso", help="file .sqlite di un caso (BIRD o caso dei PC)")
     parser.add_argument("--database", help="un database SQLite qualsiasi")
     parser.add_argument("--partenza", nargs="+", help="le tabelle di partenza (con --database)")
@@ -95,8 +97,8 @@ def main():
 
     print(f"Tabelle di partenza: {', '.join(partenza)}  ->  tabella finale: {finale}\n")
     inizio = time.time()
-    migliore, _, _ = ricostruisci_misto(conn, partenza, finale, argomenti.modelli, argomenti.secondi_max,
-                                        argomenti.correzioni)
+    migliore, proposte, trovate = ricostruisci_misto(conn, partenza, finale, argomenti.modelli,
+                                                     argomenti.secondi_max, argomenti.correzioni)
     secondi = time.time() - inizio
     print()
     if migliore is None:

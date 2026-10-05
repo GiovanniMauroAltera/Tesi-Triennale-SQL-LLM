@@ -1,29 +1,23 @@
-"""Metodo D: ricostruisce la query senza modelli linguistici, provando le regole possibili una per una.
+"""Prima parte della versione ottimizzata: cerca nei dati le regole che selezionano le righe giuste.
 
-Serve come confronto con i modelli, ed e' il primo passo del metodo misto (codice_misto.py).
-Il procedimento:
+Non usa modelli linguistici: prova le regole possibili una per una. Il procedimento:
 1. per ogni colonna della tabella finale cerca la colonna di partenza che ne contiene tutti i valori
    (anche unendo le due tabelle con il loro collegamento);
 2. divide le righe di partenza in "giuste" (finiscono nella tabella finale) e "sbagliate";
 3. prova le regole dalla piu' semplice alla piu' complicata e tiene quelle che lasciano passare le righe
    giuste e nessuna sbagliata. Ogni query trovata e' verificata come quelle dei modelli.
 
-Non sa fare calcoli (conteggi, somme, medie) ne' dedurre valori che non sono nei dati: in quei casi trova
-al massimo il filtro, senza la query completa. E puo' trovare una regola che funziona per coincidenza
-(un intervallo di CAP al posto dello stato): per questo le regole semplici vengono provate per prime.
-
-Come si usa:
-  python codice_ricerca_noLLM.py --caso casi_BIRD/1334_student_club.sqlite
-  python codice_ricerca_noLLM.py --database dati.sqlite --partenza A B --finale C
+Le regole trovate diventano i "suggerimenti del programma" che versione_ottimizzata.py manda ai modelli.
+Da sole non bastano: il programma non sa fare calcoli (conteggi, somme, medie) ne' dedurre valori che non
+sono nei dati, e puo' trovare una regola che funziona per coincidenza (un intervallo di CAP al posto
+dello stato). Per questo le regole semplici vengono provate per prime e la scelta finale la fa il modello.
 """
-import argparse
 import bisect
 import random
 import re
 import time
 
-from verifica import (apri_database, chiavi_di_collegamento, colonne_di, leggi_info_caso, leggi_righe, nome_sql,
-                      verifica)
+from verifica import chiavi_di_collegamento, colonne_di, leggi_righe, nome_sql, verifica
 
 MAX_RIGHE_BASE = 300_000            # tabelle (o coppie di tabelle unite) piu' grandi si saltano: troppo lente
 MAX_CANDIDATI_PER_COLONNA = 3       # colonne di partenza provate per ogni colonna finale
@@ -528,6 +522,19 @@ def candidate_del_livello(contesto, livello, scadenza):
     return candidate, False
 
 
+def ordina_per_colonna(righe, i, verso):
+    """Le righe ordinate secondo la colonna i: dal valore piu' grande (DESC) o dal piu' piccolo (ASC)."""
+    coppie = []
+    for posizione, riga in enumerate(righe):
+        # La posizione serve a parita' di valore: cosi' Python non confronta mai due righe intere.
+        coppie.append((riga[i], posizione))
+    coppie.sort(reverse=(verso == "DESC"))
+    ordinate = []
+    for valore, posizione in coppie:
+        ordinate.append(righe[posizione])
+    return ordinate
+
+
 def candidate_primi_n(contesto, scadenza):
     """ORDER BY ... LIMIT N: le righe finali sono le prime N in ordine di una colonna (anche dopo un filtro)."""
     candidate = []
@@ -556,7 +563,7 @@ def candidate_primi_n(contesto, scadenza):
                 if riga[i] is not None:
                     valide.append(riga)
             for verso in ("DESC", "ASC"):
-                ordinate = sorted(valide, key=lambda riga: riga[i], reverse=(verso == "DESC"))
+                ordinate = ordina_per_colonna(valide, i, verso)
                 primi = ordinate[:n + 1]
                 if len(primi) > n and primi[n - 1][i] == primi[n][i]:
                     continue  # pari merito al confine: quali righe restano dipende dal caso, non e' una regola
@@ -596,7 +603,7 @@ def scrivi_sql(contesto, condizione, ordine):
 # 4. Tutti i contesti possibili
 # ---------------------------------------------------------------------------------------------------------
 
-def contesti_possibili(conn, tabelle_di_partenza, righe_finali, solo_completi):
+def contesti_possibili(conn, tabelle_di_partenza, righe_finali):
     """Tutti i contesti utili. Se qualcuno e' completo, quelli parziali non servono: si tengono solo i completi."""
     numero_colonne_finali = len(righe_finali[0])
     contesti = []
@@ -623,17 +630,18 @@ def contesti_possibili(conn, tabelle_di_partenza, righe_finali, solo_completi):
             if richiesti:
                 for i, valori in enumerate(valori_colonna):
                     if richiesti <= valori:  # tutti i valori richiesti sono nella colonna
-                        adatte.append(i)
-            adatte.sort(key=lambda i: len(valori_colonna[i]))
-            candidati.append(adatte[:MAX_CANDIDATI_PER_COLONNA])
+                        adatte.append((len(valori), i))  # (quanti valori diversi ha, posizione della colonna)
+            adatte.sort()
+            scelte = []
+            for quanti_valori, i in adatte[:MAX_CANDIDATI_PER_COLONNA]:
+                scelte.append(i)
+            candidati.append(scelte)
 
         posizioni = []
         for j, adatte in enumerate(candidati):
             if adatte:
                 posizioni.append(j)
         if not posizioni:
-            continue
-        if solo_completi and len(posizioni) < numero_colonne_finali:
             continue
         scelte_per_colonna = []
         for j in posizioni:
@@ -664,22 +672,20 @@ def verifica_parziale(conn, contesto, sql):
 # 5. La ricerca
 # ---------------------------------------------------------------------------------------------------------
 
-def cerca_filtri(conn, tabelle_di_partenza, tabella_finale, secondi_max=60, quanti=1, solo_complete=True,
-                 per_livello=None):
+def cerca_filtri(conn, tabelle_di_partenza, tabella_finale, secondi_max, quanti, per_livello):
     """Prova le regole dalla piu' semplice e restituisce (trovate, numero di regole verificate).
 
     Ogni trovata e' un dizionario con la query, il livello della regola e se e' "completa" (riproduce
     la tabella finale, verificata) o solo un filtro (le colonne calcolate mancano). Si ferma dopo
-    `quanti` regole. Senza `per_livello` si ferma anche alla fine del primo livello in cui ne ha trovata
-    almeno una (le regole piu' complicate sono meno probabili); con `per_livello` invece raccoglie al
-    massimo quel numero di regole da ogni livello, per proporre al modello regole di tipo diverso.
+    `quanti` regole, e da ogni livello ne prende al massimo `per_livello`: cosi' al modello arrivano
+    regole di tipo diverso, non dieci varianti della stessa.
     """
     inizio = time.time()
     scadenza = inizio + secondi_max
-    _, righe_finali = leggi_righe(conn, nome_sql(tabella_finale))
+    colonne_finali, righe_finali = leggi_righe(conn, nome_sql(tabella_finale))
     if not righe_finali:
         return [], 0
-    contesti = contesti_possibili(conn, tabelle_di_partenza, righe_finali, solo_complete)
+    contesti = contesti_possibili(conn, tabelle_di_partenza, righe_finali)
     trovate = []
     condizioni_viste = set()  # la stessa condizione su un'altra unione di tabelle non e' una regola diversa
     provate = 0
@@ -690,16 +696,18 @@ def cerca_filtri(conn, tabelle_di_partenza, tabella_finale, secondi_max=60, quan
         for numero_contesto, contesto in enumerate(contesti):
             candidate, tempo_finito = candidate_del_livello(contesto, livello, scadenza)
             for peso, condizione, ordine in candidate:
-                da_provare.append((peso, numero_contesto, condizione, ordine, contesto))
+                # Il numero in terza posizione e' l'ordine di arrivo: a parita' di peso e di contesto si prova
+                # prima la candidata trovata prima (e cosi' il confronto non arriva mai al contesto).
+                da_provare.append((peso, numero_contesto, len(da_provare), condizione, ordine, contesto))
             if tempo_finito:
                 return trovate, provate
-        da_provare.sort(key=lambda candidata: (candidata[0], candidata[1]))
+        da_provare.sort()
 
         trovate_nel_livello = 0
-        for peso, numero_contesto, condizione, ordine, contesto in da_provare:
+        for peso, numero_contesto, arrivo, condizione, ordine, contesto in da_provare:
             if time.time() > scadenza:
                 return trovate, provate
-            if per_livello and trovate_nel_livello >= per_livello:
+            if trovate_nel_livello >= per_livello:
                 break
             if (condizione, ordine) in condizioni_viste:
                 continue
@@ -718,44 +726,5 @@ def cerca_filtri(conn, tabelle_di_partenza, tabella_finale, secondi_max=60, quan
                                 "esito": esito})
                 if len(trovate) >= quanti:
                     return trovate, provate
-        if trovate and not per_livello:
-            break
     return trovate, provate
 
-
-def cerca_query(conn, tabelle_di_partenza, tabella_finale, secondi_max=120):
-    """Il metodo D da solo: la prima query completa e verificata, oppure None."""
-    trovate, provate = cerca_filtri(conn, tabelle_di_partenza, tabella_finale, secondi_max, quanti=1, solo_complete=True)
-    if trovate:
-        return trovate[0], provate
-    return None, provate
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Cerca la query provando le regole possibili, senza modelli linguistici.")
-    parser.add_argument("--caso", help="file .sqlite di un caso (BIRD o caso dei PC)")
-    parser.add_argument("--database", help="un database SQLite qualsiasi")
-    parser.add_argument("--partenza", nargs="+", help="le tabelle di partenza (con --database)")
-    parser.add_argument("--finale", help="la tabella finale (con --database)")
-    parser.add_argument("--secondi-max", type=int, default=120)
-    argomenti = parser.parse_args()
-    if argomenti.caso:
-        conn = apri_database(argomenti.caso)
-        partenza, finale = leggi_info_caso(conn)
-    elif argomenti.database and argomenti.partenza and argomenti.finale:
-        conn = apri_database(argomenti.database)
-        partenza, finale = argomenti.partenza, argomenti.finale
-    else:
-        parser.error("indica --caso oppure --database con --partenza e --finale")
-
-    inizio = time.time()
-    trovata, provate = cerca_query(conn, partenza, finale, argomenti.secondi_max)
-    secondi = time.time() - inizio
-    if trovata:
-        print(f"QUERY TROVATA in {secondi:.1f} s ({provate} regole verificate, regola: {trovata['livello']}):\n\n{trovata['sql']}")
-    else:
-        print(f"Nessuna regola trovata in {secondi:.1f} s ({provate} verificate): forse servono calcoli o dati che non ci sono.")
-
-
-if __name__ == "__main__":
-    main()

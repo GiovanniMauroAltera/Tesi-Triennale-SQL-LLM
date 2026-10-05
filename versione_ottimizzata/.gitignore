@@ -1,7 +1,0 @@
-__pycache__/
-*.pyc
-# I casi BIRD contengono tabelle reali di BIRD, alcune grandi: si rigenerano dal repository Tesi-Triennale
-casi_BIRD/*.sqlite
-risultati/
-casi_BIRD_nuovi/
-casi_BIRD_mai_visti/

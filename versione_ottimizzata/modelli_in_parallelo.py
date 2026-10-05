@@ -1,23 +1,16 @@
-"""Ricostruisce la query SQL che trasforma le tabelle di partenza nella tabella finale.
+"""Seconda parte della versione ottimizzata: chiede la query a piu' modelli contemporaneamente.
 
-Chiede la query a piu' modelli contemporaneamente, la esegue e tiene la prima che riproduce
-davvero la tabella finale senza copiarne i valori.
-
-Come si usa:
-  python codice_principale.py --caso casi_BIRD/850_formula_1.sqlite
-  python codice_principale.py --database dati.sqlite --partenza VENDITE_PC --finale TABELLA_FINALE_TARGET
-  python codice_principale.py --caso ... --modelli gemma qwen3-4b --salva risultato.json
+Ogni risposta viene eseguita e confrontata con la tabella finale (verifica.py). A un modello che sbaglia
+si spiega cosa non va (prompt.py) e gli si da' un altro tentativo; ci si ferma alla prima query che
+riproduce davvero la tabella finale senza copiarne i valori. Lo usa versione_ottimizzata.py.
 """
-import argparse
-import json
 import queue
-import sys
 import threading
 import time
 
-from modelli import MODELLI, MODELLI_DI_BASE, ModelloNonDisponibile, chiama
-from prompt import estrai_sql, messaggi_iniziali, messaggio_di_correzione
-from verifica import apri_database, leggi_info_caso, verifica
+from modelli import ModelloNonDisponibile, chiama
+from prompt import estrai_sql, messaggio_di_correzione
+from verifica import verifica
 
 CORREZIONI = 2   # dopo la prima risposta, quante volte un modello puo' correggersi
 TENTATIVI_PER_ERRORE_DI_RETE = 2
@@ -98,15 +91,13 @@ def piu_vicina(proposte):
     return migliore
 
 
-def ricostruisci(conn, tabelle_di_partenza, tabella_finale, modelli, secondi_max, correzioni=CORREZIONI, messaggi=None):
+def ricostruisci(conn, tabella_finale, messaggi, modelli, secondi_max, correzioni=CORREZIONI):
     """Chiede la query a tutti i modelli insieme; a chi sbaglia spiega cosa non va e da' un altro tentativo.
 
+    `messaggi` e' la conversazione iniziale (il prompt preparato da versione_ottimizzata.py).
     Si ferma alla prima query che riproduce la tabella finale senza copiarne i valori.
     Restituisce la proposta migliore e l'elenco di tutte le proposte ricevute.
-    `messaggi`: i messaggi iniziali gia' pronti (li usa il metodo misto), altrimenti li prepara qui.
     """
-    if not messaggi:
-        messaggi = messaggi_iniziali(conn, tabelle_di_partenza, tabella_finale)
     conversazioni = {}  # modello -> i messaggi scambiati finora con lui
     tentativo = {}      # modello -> a che tentativo e' arrivato
     for modello in modelli:
@@ -155,66 +146,3 @@ def ricostruisci(conn, tabelle_di_partenza, tabella_finale, modelli, secondi_max
 
     return piu_vicina(proposte), proposte
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Ricostruisce la query che porta dalle tabelle di partenza alla tabella finale.")
-    parser.add_argument("--caso", help="file .sqlite di un caso (BIRD o caso dei PC): le tabelle le legge da solo")
-    parser.add_argument("--database", help="un database SQLite qualsiasi")
-    parser.add_argument("--partenza", nargs="+", help="le tabelle di partenza (con --database)")
-    parser.add_argument("--finale", help="la tabella finale (con --database)")
-    parser.add_argument("--modelli", nargs="+", choices=list(MODELLI), default=MODELLI_DI_BASE,
-                        help="i modelli da interrogare in parallelo (di base quelli di MODELLI_DI_BASE)")
-    parser.add_argument("--correzioni", type=int, default=CORREZIONI,
-                        help="quante volte un modello puo' correggersi dopo la prima risposta (0 = nessuna)")
-    parser.add_argument("--secondi-max", type=int, default=900, help="tempo massimo di attesa")
-    parser.add_argument("--salva", help="file .json in cui salvare il risultato")
-    argomenti = parser.parse_args()
-
-    if argomenti.caso:
-        conn = apri_database(argomenti.caso)
-        partenza, finale = leggi_info_caso(conn)
-    elif argomenti.database and argomenti.partenza and argomenti.finale:
-        conn = apri_database(argomenti.database)
-        partenza, finale = argomenti.partenza, argomenti.finale
-    else:
-        parser.error("indica --caso oppure --database con --partenza e --finale")
-
-    print(f"Tabelle di partenza: {', '.join(partenza)}  ->  tabella finale: {finale}")
-    print(f"Chiedo la query a: {', '.join(argomenti.modelli)}\n")
-    inizio = time.time()
-    migliore, proposte = ricostruisci(conn, partenza, finale, argomenti.modelli, argomenti.secondi_max,
-                                      argomenti.correzioni)
-    secondi = time.time() - inizio
-
-    print()
-    verificata = migliore is not None and accettabile(migliore["esito"])
-    if migliore is None:
-        print("Nessun modello ha dato una risposta utilizzabile.")
-    else:
-        if verificata:
-            print(f"QUERY TROVATA ({migliore['modello']}, {secondi:.0f} s):\n")
-        else:
-            print(f"NESSUNA QUERY VERIFICATA, la migliore e' ({migliore['modello']}, {secondi:.0f} s):\n")
-        print(migliore["sql"])
-        if not verificata:
-            print(f"\nAttenzione: {descrivi(migliore['esito'])}")
-
-    if argomenti.salva:
-        da_salvare = []
-        for proposta in proposte:
-            senza_testo = dict(proposta)
-            senza_testo.pop("testo", None)  # il testo intero della risposta e' lungo e non serve
-            da_salvare.append(senza_testo)
-        nome_migliore = None
-        if migliore:
-            nome_migliore = migliore["modello"]
-        with open(argomenti.salva, "w", encoding="utf-8") as f:
-            json.dump({"secondi": round(secondi, 1), "migliore": nome_migliore, "proposte": da_salvare},
-                      f, indent=2, ensure_ascii=False, default=str)
-    if verificata:
-        sys.exit(0)
-    sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()

@@ -26,14 +26,15 @@ MODELLI = {
     "gpt-oss-120b": {"fornitore": "groq", "nome": "openai/gpt-oss-120b"},
     "nemotron": {"fornitore": "openrouter", "nome": "nvidia/nemotron-3-ultra-550b-a55b:free"},
     "gemma": {"fornitore": "google", "nome": "gemma-4-31b-it"},
-    # Sostituito da Qwen3.5 9B tra quelli di base (03/10): con il metodo misto 24 query giuste su 30 contro 22.
+    # Sostituito da Qwen3.5 9B tra quelli di base (03/10): con la versione ottimizzata scrive giuste in media
+    # 22 query su 30, Qwen3.5 9B quasi 24.
     "qwen2.5-coder-7b": {"fornitore": "ollama", "nome": "qwen2.5-coder:7b", "di_base": False},
     # Al posto di Llama 3.1 (01/10), due versioni di Qwen3 4B (2,5 GB): "instruct" risponde subito,
     # quella base ragiona sempre prima di rispondere (non si puo' spegnere) e le serve un tetto di token piu' alto.
     "qwen3-4b": {"fornitore": "ollama", "nome": "qwen3:4b-instruct"},
     # Non tra quelli di base (03/10): sul PC della tesi impiega 6-15 minuti a caso e rallenta gli altri modelli locali.
     "qwen3-4b-ragiona": {"fornitore": "ollama", "nome": "qwen3:4b", "pensa": True, "max_token": 4096, "di_base": False},
-    # Il modello locale del benchmark, per confrontarlo con il metodo misto (03/10): non e' tra quelli di base
+    # Il modello locale della versione originale, per confrontarlo con la versione ottimizzata (03/10): non e' tra quelli di base
     # perche' sul PC della tesi e' lento (4,9 GB, non sta nella memoria della scheda video).
     "llama3.1": {"fornitore": "ollama", "nome": "llama3.1:latest", "di_base": False},
     # Qwen3.5 (03/10, scelti dall'utente per provare i modelli locali piu' nuovi): il ragionamento si puo' spegnere.
@@ -117,7 +118,7 @@ def chiama(modello, messaggi):
     indirizzo, variabile, secondi = FORNITORI[configurazione["fornitore"]]
     client = OpenAI(base_url=indirizzo, api_key=leggi_chiave(variabile), timeout=secondi, max_retries=0)
     risposta = None
-    for _ in range(MAX_ATTESE_LIMITE_AL_MINUTO):
+    for volta in range(MAX_ATTESE_LIMITE_AL_MINUTO):
         try:
             risposta = client.chat.completions.create(model=configurazione["nome"], messages=messaggi,
                                                       temperature=0.0)
