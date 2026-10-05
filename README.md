@@ -16,6 +16,27 @@ In breve, sui 30 casi di BIRD:
 
 ![Prima e dopo l'ottimizzazione](grafici/fig_onesti.png)
 
+## Prova veloce
+
+Per vedere il progetto in funzione bastano Python 3 e pochi minuti. Si scarica la repository, con `git clone` oppure scaricando lo `.zip` dalla pagina delle [release](https://github.com/GiovanniMauroAltera/Tesi-Triennale-SQL-LLM/releases) e scompattandolo, e dalla sua cartella principale si lanciano:
+
+```bash
+pip install -r requirements.txt
+python prova_veloce/quick_start.py
+```
+
+Lo script prova la versione ottimizzata su quattro casi già pronti nella repository: tre casi piccoli presi da BIRD (nella cartella [`prova_veloce/`](prova_veloce/)) e il caso dei PC. Per ogni caso mostra le tabelle di partenza, la tabella finale, le regole che trova il programma e la query finale, insieme alla query vera per confronto. Così com'è non usa nessun modello, quindi non servono chiavi né Ollama, e finisce in meno di mezzo minuto: risolve i tre casi di BIRD, ma non il caso dei PC, perché lì servono dei calcoli che il programma da solo non sa fare.
+
+Per provare la versione ottimizzata completa, con un modello che sceglie la regola e scrive la query:
+
+- con un modello sul proprio computer: installare [Ollama](https://ollama.com/), scaricare il modello con `ollama pull qwen3:4b-instruct` (2,5 GB) e lanciare
+    ```bash
+    python prova_veloce/quick_start.py --modelli qwen3-4b
+    ```
+- con un modello online, gratis: creare una chiave su [Google AI Studio](https://aistudio.google.com/) o su [Groq](https://console.groq.com/), salvarla come variabile d'ambiente (`GOOGLE_API_KEY` o `GROQ_API_KEY`, vedi [Come rifare tutto](#come-rifare-tutto)) e lanciare `--modelli gemma` oppure `--modelli gpt-oss-120b`. Il caso dei PC, nelle mie prove, l'ha risolto solo Gemma.
+
+Con `--caso` si prova un caso solo, per esempio `python prova_veloce/quick_start.py --caso 781_superhero`.
+
 ## I casi di prova
 
 **Il caso dei PC.** È il caso da cui è partito il progetto e l'ho inventato io: una tabella con le vendite di alcuni PC, con i prezzi in euro, sterline e yen, e una tabella finale con il prezzo medio di ogni modello in dollari. I tassi di cambio non compaiono da nessuna parte: il modello deve dedurli dai dati. Il file è [`caso_PC/pc_multivaluta.sqlite`](caso_PC/) e lo crea `versione_originale/codice_caso_PC.py`.
@@ -189,6 +210,7 @@ caso_PC/                   il caso dei PC
 casi_BIRD/                 i 30 casi di BIRD (su GitHub c'è solo l'elenco, i file si ricreano)
 casi_BIRD_nuovi/           i 90 casi nuovi (non sono su GitHub, si ricreano)
 grafici/                   il confronto tra le due versioni: tabelle, grafici e tutte le prove
+prova_veloce/              la prova veloce: tre casi di esempio e lo script quick_start.py
 versione_originale/        la versione originale e il suo benchmark
 versione_ottimizzata/      la versione ottimizzata e gli script per misurarla
 ```
