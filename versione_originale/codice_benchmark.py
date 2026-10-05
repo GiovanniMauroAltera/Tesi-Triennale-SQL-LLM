@@ -46,7 +46,9 @@ def attesa_dopo_errore(errore_testo, tentativo):
         return ATTESA_RETRY_RATE_LIMIT_SECONDI * tentativo
     return ATTESA_RETRY_SECONDI
 
-CARTELLA_RISULTATI = "risultati_benchmark"
+# Tutti gli script si lanciano dalla cartella principale della repository: i casi sono in comune con la
+# versione ottimizzata, i risultati restano nella cartella di questa versione.
+CARTELLA_RISULTATI = os.path.join("versione_originale", "risultati_benchmark")
 CARTELLA_CASI_BIRD = "casi_BIRD"
 CASO_DEMO = os.path.join("caso_PC", "pc_multivaluta.sqlite")
 

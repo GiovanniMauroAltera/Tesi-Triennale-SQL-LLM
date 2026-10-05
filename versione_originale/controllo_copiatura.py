@@ -16,7 +16,7 @@ Togliendo righe a caso la loro query e quella gold perdono le stesse righe, quin
 controllo non le vede; il secondo si' (vedi valori_copiati). Un esatto e' robusto solo se passa
 entrambi i controlli.
 
-Aggiunge "valutazione_robusta" ai JSON in risultati_benchmark/; non richiama nessun modello e puo'
+Aggiunge "valutazione_robusta" ai JSON in versione_originale/risultati_benchmark/; non richiama nessun modello e puo'
 girare mentre il benchmark e' in corso.
 """
 import glob

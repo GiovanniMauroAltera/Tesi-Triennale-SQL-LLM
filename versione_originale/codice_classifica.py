@@ -1,6 +1,7 @@
 """Fase 5: aggrega i risultati del benchmark in una classifica (tabelle + figure per la tesi).
 
-Legge i JSON in risultati_benchmark/ (non le sottocartelle _scartati_*) e produce in classifica/:
+Legge i JSON in versione_originale/risultati_benchmark/ (non le sottocartelle _scartati_*) e produce in
+versione_originale/classifica/:
   - classifica_modelli.csv / classifica.md   classifica sui 30 casi BIRD + caso demo a parte
   - dettaglio_casi.csv                       run esatti e F1 medio per ogni coppia caso x modello
   - fig_classifica.png, fig_esiti.png, fig_casi.png, fig_tempi.png
@@ -23,7 +24,7 @@ from matplotlib.path import Path
 
 from codice_benchmark import CARTELLA_RISULTATI, CASO_DEMO, MODELLI, N_RUN, N_RUN_PER_MODELLO, elenco_casi, id_caso, n_run
 
-CARTELLA_USCITA = "classifica"
+CARTELLA_USCITA = os.path.join("versione_originale", "classifica")
 ID_DEMO = id_caso(CASO_DEMO)
 
 NOMI_MODELLI = {
