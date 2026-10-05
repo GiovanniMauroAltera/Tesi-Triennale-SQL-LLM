@@ -1,5 +1,9 @@
+# Il dataset BIRD (si scarica a parte) e i casi estratti da BIRD: contengono tabelle reali, alcune grandi,
+# e si rigenerano con gli script di estrazione.
 bird-mini-dev/
 casi_BIRD/*.sqlite
+casi_BIRD_nuovi/
+# I risultati grezzi delle prove (uno o piu' file per prova): nella repository ci sono le tabelle e i grafici.
 risultati_benchmark/
 __pycache__/
 *.pyc

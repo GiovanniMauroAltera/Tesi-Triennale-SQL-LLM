@@ -1,6 +1,6 @@
 # I casi presi da BIRD
 
-In questa cartella ci sono i 30 casi che ho usato per il benchmark, presi dal dataset [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev). Ogni caso è un piccolo file `.sqlite` che contiene tutto quello che serve: le tabelle di partenza (lo Stato A), la tabella finale (lo Stato B) e qualche informazione in più. Il formato è lo stesso che uso per il caso dei PC (`caso_PC/pc_multivaluta.sqlite`).
+In questa cartella ci sono i 30 casi che ho usato per il benchmark della versione originale e per il confronto con la versione ottimizzata, presi dal dataset [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev). Ogni caso è un piccolo file `.sqlite` che contiene tutto quello che serve: le tabelle di partenza (lo Stato A), la tabella finale (lo Stato B) e qualche informazione in più. Il formato è lo stesso che uso per il caso dei PC (`caso_PC/pc_multivaluta.sqlite`).
 
 I file `.sqlite` non li ho caricati su GitHub, perché contengono tabelle reali di BIRD e alcune sono piuttosto grandi: si ricreano sul proprio computer seguendo i passaggi qui sotto. Su GitHub c'è solo `_manifest.json`, che è l'elenco dei 30 casi scelti.
 
@@ -20,9 +20,9 @@ Dei 500 esempi di BIRD Mini-Dev solo 34 rispettano tutte queste regole: 25 hanno
 1. Scaricare BIRD Mini-Dev:
    - il file con le domande e le query vere: da https://huggingface.co/datasets/birdsql/bird_mini_dev scaricare `data/mini_dev_sqlite-00000-of-00001.json` e salvarlo come `bird-mini-dev/mini_dev_sqlite.json`;
    - i database: scaricare `dev.zip` da https://bird-bench.oss-cn-beijing.aliyuncs.com/dev.zip, aprire al suo interno `dev_20240627/dev_databases.zip` ed estrarre in `bird-mini-dev/dev_databases/` solo le cartelle degli 11 database elencati qui sotto.
-2. Dalla cartella principale del progetto lanciare:
+2. Dalla cartella principale della repository lanciare:
     ```bash
-    python estrazione_casi_BIRD.py
+    python versione_originale/estrazione_casi_BIRD.py
     ```
 
 Prima di lanciarlo, la cartella `bird-mini-dev/` deve essere fatta così:
@@ -45,10 +45,18 @@ bird-mini-dev/
 
 ## Il controllo dei casi
 
-Per essere sicuro che i casi siano identici all'originale ho scritto `codice_verifica_casi_BIRD.py`: riesegue la query vera di BIRD su ogni caso e controlla che il risultato sia uguale alla tabella finale salvata nel file. Sui 30 casi il controllo passa sempre.
+Per essere sicuro che i casi siano identici all'originale ho scritto `versione_originale/codice_verifica_casi_BIRD.py`: riesegue la query vera di BIRD su ogni caso e controlla che il risultato sia uguale alla tabella finale salvata nel file. Sui 30 casi il controllo passa sempre.
 
 ```bash
-python codice_verifica_casi_BIRD.py
+python versione_originale/codice_verifica_casi_BIRD.py
+```
+
+## I 90 casi nuovi
+
+Per controllare la versione ottimizzata su casi diversi da quelli su cui l'ho costruita ho preso altri 90 casi da BIRD Mini-Dev, con gli stessi criteri tranne il limite sulla lunghezza del prompt (serviva solo ai modelli della versione originale) e tenendo solo i casi con al massimo 400.000 righe in tutto nelle tabelle di partenza, per avere file di dimensioni ragionevoli: i 15 casi "simple" rimasti, 60 casi "moderate" e 15 "challenging", scelti sempre allo stesso modo con il seme 42. Finiscono nella cartella `casi_BIRD_nuovi/`, che come questa non è su GitHub. Servono gli stessi file di BIRD Mini-Dev descritti sopra; poi, dalla cartella principale della repository:
+
+```bash
+python versione_ottimizzata/codice_estrazione_casi_nuovi.py
 ```
 
 ## Cosa c'è dentro ogni file
