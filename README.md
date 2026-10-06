@@ -37,6 +37,43 @@ Per provare la versione ottimizzata completa, con un modello che sceglie la rego
 
 Con `--caso` si prova un caso solo, per esempio `python prova_veloce/quick_start.py --caso 781_superhero`.
 
+## Usare il progetto con il proprio database
+
+Per ricostruire la query dei propri dati bastano cinque passi. Tutti i comandi si lanciano dalla cartella principale della repository.
+
+1. **Installare** Python 3 e le librerie:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2. **Mettere i dati in un file SQLite.** Il programma lavora su un file SQLite che contiene sia le tabelle di partenza sia la tabella finale. Il file non viene mai modificato: il programma ne fa una copia in memoria.
+    - Se i dati sono in file CSV (o in Excel, salvando ogni foglio come CSV), con il programma gratuito [DB Browser for SQLite](https://sqlitebrowser.org/) si crea un nuovo database e si importa ogni file come tabella, dal menu File › Importa › Tabella da file CSV.
+    - Se sono in un altro database (PostgreSQL, MySQL...), si esportano le tabelle in CSV e si importano allo stesso modo.
+3. **Scegliere il modello.**
+    - Sul proprio computer: installare [Ollama](https://ollama.com/), scaricare il modello con `ollama pull qwen3:4b-instruct` (2,5 GB) e usare `--modelli qwen3-4b`. **I dati non escono dal computer**: è la scelta giusta per dati riservati.
+    - Online, gratis: creare una chiave su Groq, Google AI Studio o OpenRouter, salvarla come variabile d'ambiente (vedi [Come rifare tutto](#come-rifare-tutto)) e usare `--modelli gpt-oss-120b`, `--modelli gemma` o `--modelli nemotron`. In questo caso il prompt, con la struttura delle tabelle e alcune righe di esempio, viene mandato al servizio.
+    - Senza `--modelli` il programma usa insieme i modelli di base (gpt-oss, Nemotron, Gemma, Qwen3 4B e Qwen3.5 9B) e tiene la prima query verificata; quelli senza chiave o senza Ollama vengono saltati.
+4. **Lanciare il programma**, indicando il file, le tabelle di partenza e la tabella finale:
+    ```bash
+    python versione_ottimizzata/versione_ottimizzata.py --database C:\percorso\miei_dati.sqlite --partenza TABELLA_A TABELLA_B --finale TABELLA_FINALE --modelli qwen3-4b
+    ```
+    Con `--correzioni` si sceglie quanti tentativi di correzione dare ai modelli (di base 2) e con `--secondi-max` il tempo massimo (di base 900 secondi).
+5. **Leggere il risultato.** Il programma stampa la query e dice se è verificata, cioè se riproduce la tabella finale senza copiarne i valori. Per esempio, sul caso dei circuiti in Austria della prova veloce:
+    ```
+    [    0 s] programma: 3 regole che selezionano le righe giuste
+    [   22 s] qwen3-4b (tentativo 1): RIPRODUCE LA TABELLA FINALE
+
+    QUERY TROVATA (qwen3-4b, 22 s):
+
+    SELECT DISTINCT t0."location", t0."lat", t0."lng"
+    FROM "circuits" AS t0
+    WHERE t0."country" = 'Austria'
+      AND t0."name" LIKE '%Ring%'
+      OR t0."name" LIKE '%Zeltweg%'
+    ```
+    Se invece nessuna query è verificata, il programma scrive "NESSUNA QUERY VERIFICATA", mostra la più vicina e spiega cosa non torna.
+
+Una query verificata conviene comunque leggerla. Riproduce la tabella finale sui dati di oggi, ma può contenere condizioni in più o funzionare per coincidenza: nell'esempio qui sopra il modello ha aggiunto due condizioni sul nome che non servono, mentre la regola vera è solo `country = 'Austria'`. I limiti principali sono spiegati più in basso: il metodo funziona meglio quando la trasformazione è "prendi queste righe con questo filtro", meno con raggruppamenti, sottoquery e calcoli complessi; il programma che cerca i filtri unisce al massimo due tabelle e salta quelle con più di 300.000 righe.
+
 ## I casi di prova
 
 **Il caso dei PC.** È il caso da cui è partito il progetto e l'ho inventato io: una tabella con le vendite di alcuni PC, con i prezzi in euro, sterline e yen, e una tabella finale con il prezzo medio di ogni modello in dollari. I tassi di cambio non compaiono da nessuna parte: il modello deve dedurli dai dati. Il file è [`caso_PC/pc_multivaluta.sqlite`](caso_PC/) e lo crea `versione_originale/codice_caso_PC.py`.
@@ -223,7 +260,7 @@ Nella cartella `versione_originale/`:
 - `controllo_copiatura.py` fa i due controlli sulle copiature, senza richiamare i modelli.
 - `codice_classifica.py` crea la classifica, le tabelle e i grafici nella cartella `classifica/`.
 - `funzioni_comuni.py` contiene le parti usate da tutti gli script: il prompt, l'estrazione dell'SQL dalla risposta del modello, l'esecuzione e la valutazione. `test_valutazione.py` controlla che la valutazione funzioni su casi di cui conosco già il risultato; `ricalcolo_valutazioni.py` ricalcola la valutazione dei risultati già salvati.
-- `codice_locale_v2.py` e `codice_OpenRouter_v2.py` sono i primi due script del progetto riscritti con `funzioni_comuni.py` e la valutazione automatica; gli script originali e le loro stampe sono descritti in fondo alla pagina.
+- `codice_locale_v2.py` e `codice_OpenRouter_v2.py` sono i primi due script del progetto riscritti con `funzioni_comuni.py` e la valutazione automatica. Gli script originali del primo esperimento, sul caso dei PC, sono `Codice python in locale.py` e `codice python OpenRouter.py`; le loro stampe sono nelle cartelle `Risultato In Locale/` e `Risultato OpenRouter/`, e in `progetto alternativo/` c'è la prova in cui il modello riceve solo la tabella di partenza e la struttura di quella finale.
 
 Nella cartella `versione_ottimizzata/`:
 
@@ -286,11 +323,10 @@ Tutti i comandi si lanciano dalla cartella principale della repository.
     ```
     I risultati grezzi delle prove non sono su GitHub (sono migliaia di file), ma `codice_confronto.py` funziona anche senza: in quel caso usa le prove salvate in `grafici/prove.csv`.
 
-### Usare la versione ottimizzata sui propri dati
+### Usare la versione ottimizzata su un caso
 
 ```bash
-python versione_ottimizzata/versione_ottimizzata.py --database miei_dati.sqlite --partenza TABELLA_A TABELLA_B --finale TABELLA_FINALE
 python versione_ottimizzata/versione_ottimizzata.py --caso casi_BIRD/1334_student_club.sqlite
 ```
 
-Il programma stampa la query trovata e dice se è verificata, cioè se riproduce davvero la tabella finale senza copiarla. Con `--modelli` si sceglie quali modelli usare (di base gpt-oss, Nemotron, Gemma, Qwen3 4B e Qwen3.5 9B; si possono usare anche solo quelli locali, per esempio `--modelli qwen3-4b`) e con `--correzioni` quanti tentativi di correzione dare. Tutti i servizi usati sono gratuiti.
+Per usarla sui propri dati, le istruzioni passo per passo sono nella sezione [Usare il progetto con il proprio database](#usare-il-progetto-con-il-proprio-database).
