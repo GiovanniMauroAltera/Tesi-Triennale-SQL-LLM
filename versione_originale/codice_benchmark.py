@@ -32,9 +32,6 @@ from funzioni_comuni import (
 )
 
 N_RUN = 3
-# Run in piu' per avere stime piu' precise: 8 per i due modelli senza limiti giornalieri (30/09),
-# 5 per Llama (01/10). Nemotron e gpt-oss restano a N_RUN per le quote gratuite giornaliere
-# (OpenRouter 50 richieste, Groq ~57 run).
 N_RUN_PER_MODELLO = {"gemma": 8, "qwen2.5-coder-7b": 8, "llama3.1": 5}
 MAX_TENTATIVI = 5
 ATTESA_RETRY_SECONDI = 10
